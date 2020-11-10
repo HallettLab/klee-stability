@@ -1,3 +1,5 @@
+setwd("~/Repositories/klee-stability")
+
 source("KLEE_data_cleaning.R")
 library(tidyverse)
 
