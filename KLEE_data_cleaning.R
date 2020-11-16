@@ -54,6 +54,17 @@ names(totcov) <- c("Block",  "Treatment", "Cattle",   "Mega",     "Meso",     "1
 totcov_long <- pivot_longer(totcov, cols = "199909":"201306", names_to = "Date", values_to = "Tot_Cover")
 
 
+#create Unique ID for each block-plot combo and format date columns so they can fit in the lubridate package
+tcov_long <- totcov_long %>%
+  mutate(Unique_ID = paste(Block, Treatment, sep = "_")) %>% #create unique ID for each plot
+  mutate(day = "01") %>% #create a filler column with day value so that dates can be parsed
+  mutate(Date_junk = paste(Date, day, sep = "_")) %>% #paste filler day column with year-month column
+  mutate(Date_final = ymd(Date_junk)) %>% #change dates into recognized format
+  mutate(Date_numeric = paste(year(Date_final), month(Date_final), day(Date_final), sep = "0")) #create column that can be coerced into numeric form
+
+
+
+
 ##################################################
 ### First Hits to 2015, Master
 ##################################################

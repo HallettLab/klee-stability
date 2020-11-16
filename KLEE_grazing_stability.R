@@ -10,31 +10,31 @@ library(codyn)
 ##########################################################
 
 ## Get data ready to graph as a time series
-meancov <- totcov_long %>%
-  group_by(Treatment, Date) %>% #group by treatment & date
+meancov <- tcov_long %>%
+  group_by(Treatment, Date_final) %>% #group by treatment & date
   summarize(Mean_Cov = mean(Tot_Cover)) #calculate the mean total cover at each treatment & date
 
 
 #change variable formats to get this to work in geom_line
 meancov$Treatment <- as.character(meancov$Treatment)
-meancov$Date <- as.numeric(meancov$Date)
+#meancov$Date <- as.numeric(meancov$Date)
 
 ## Graph! 
 #graph the time series - all treatments in one plot
-ggplot(meancov, aes(x=Date)) +
+ggplot(meancov, aes(x=Date_final)) +
   geom_line(aes(y=Mean_Cov, group=Treatment, col=Treatment)) +
   theme_bw() +
   ylab("Total Cover") + xlab("Date (yyyymm)")
  
 #separate by treatment to more easily view overlapping lines
-ggplot(meancov, aes(x=Date)) +
+ggplot(meancov, aes(x=Date_final)) +
   geom_line(aes(y=Mean_Cov, col=Treatment)) +
   theme_bw() +
   ylab("Total Cover") + xlab("Date (yyyymm)") +
   facet_wrap(~Treatment)
 
 #graph as scatterplot
-ggplot(meancov, aes(x=Date, y=Mean_Cov, col=Treatment)) + 
+ggplot(meancov, aes(x=Date_final, y=Mean_Cov, col=Treatment)) + 
   geom_point() +
   facet_wrap(~Treatment) +
   theme_bw()
@@ -81,10 +81,26 @@ ggplot(meantotcov, aes(x=Date_final, y=Mean_TotCov, col=TREATMENT)) +
 
 ggsave("totalcov_calc_scatterplot.pdf")
 
+################################################################################
+############# Compare Existing & Calculated Total Cov Data #####################
+################################################################################
 
-##########################################################
-#### Explore Proportional Cover Data #####################
-##########################################################
+
+names(meantotcov) <- c("Treatment",   "Date_final",  "MeanCov_Calculated")
+
+# combine two total cover data frames in order to graph & compare whether they are the same
+totcov_comparison <- left_join(meancov, meantotcov, by = c("Treatment", "Date_final"))
+
+
+ggplot(totcov_comparison, aes(x=MeanCov_Calculated, y=Mean_Cov)) +
+  geom_point()
+#data match up very well besides 6 values... uncertain what these are or mean...
+
+
+
+################################################################################
+#### Explore Proportional Cover Data ###########################################
+################################################################################
 
 ## Get data ready to graph as a time series
 meancov <- propcov_long %>%
@@ -165,7 +181,9 @@ ggplot(stabilitycv, aes(x=TREATMENT, y=CV)) +
   theme_bw()
 
 ### NEED TO CALCULATE HERBIVORE GUILD & GRAZING INTENSITY VARIABLES SOMEHOW?
-
+##calculate # herbivore guilds
+herb <- stabilitycv %>%
+  mutate(ifelse())
 
 
 
