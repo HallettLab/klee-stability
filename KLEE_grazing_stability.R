@@ -3,6 +3,61 @@ setwd("~/Repositories/klee-stability")
 source("KLEE_data_cleaning.R")
 library(tidyverse)
 library(codyn)
+library(zoo)
+library(tidyquant)
+
+
+
+################################################################################
+### Calculate Stability over a moving window  ##################################
+################################################################################
+
+#I'm wondering if a data frame is not the right thing to feed into these functions?
+#here I'm just removing unnecessary components from the data frame in case these 
+#are confusing the function
+#I will eventually move some of this to the data cleaning script.
+klee <- klee_long %>%
+  select(!(day:Date_final)) %>%
+  filter(Abundance > 0, !is.na(Abundance))
+
+klee.ts <- klee %>%
+  select(SPECIES, Abundance, Unique_ID, Date_numeric)
+
+
+#the stability function that I want to apply over the moving window
+community_stability(klee.ts, 
+                    time.var = "Date_numeric", 
+                    abundance.var = "Abundance", 
+                    replicate.var = "Unique_ID")
+
+## my attempts to apply this over a moving window
+mw_stability <- rollapply(klee, width = 10, FUN = community_stability(klee,
+                                          time.var = "Date_numeric", 
+                                          abundance.var = "Abundance", 
+                                          replicate.var = "Unique_ID"))
+
+
+
+#based on an online example, doesn't work. probably more complicated than it needs to be
+moving_stability <- klee.ts %>%
+  tq_mutate(
+    
+    #tq_mutate arguments
+    select = c(Abundance, Unique_ID, Date_numeric), 
+    mutate_fun = rollapply,
+    
+    #rollapply arguments
+    width = 10, 
+    FUN = community_stability,
+    
+    #community stability arguments
+    time.var = "Date_numeric", 
+    abundance.var = "Abundance", 
+    replicate.var = "Unique_ID", 
+    
+    #tq_mutate arguments
+    col_rename = "stability_10yr"
+  )
 
 
 ##########################################################
@@ -184,7 +239,6 @@ ggplot(stabilitycv, aes(x=TREATMENT, y=CV)) +
 ##calculate # herbivore guilds
 herb <- stabilitycv %>%
   mutate(ifelse())
-
 
 
 ################################################################################

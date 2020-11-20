@@ -2,10 +2,12 @@
 ###################### BLOCK S #################################################
 ################################################################################
 
-setwd("~/Research/KLEE/Total Hits Data CE/KLEE Veg 2007 - Jan - separated")
+setwd("~/Repositories/klee-stability/All_Hits_Data_Cleaning/Total Hits Data CE/KLEE Veg 2007 - Jan - separated")
 
 #load packages
 library(tidyverse)
+library(janitor)
+
 
 ################################################################################
 #### SC Jan 2007 Data Cleaning #################################################
@@ -53,7 +55,7 @@ SC_fill <- SC_clean %>%
   fill(type.of.hits, .direction = "down")
 
 #flip to long format
-SC_long <- pivot_longer(SC_clean, cols = "bracharia.lacnantha":"lippia", names_to = "Species", values_to = "Sp_Pin_Hits")
+SC_long <- pivot_longer(SC_fill, cols = "bracharia.lacnantha":"lippia", names_to = "Species", values_to = "Sp_Pin_Hits")
 
 SC_long$Sp_Pin_Hits <- as.numeric(SC_long$Sp_Pin_Hits) #make the # of pin hits numeric
 
@@ -63,17 +65,17 @@ SC_final <- SC_long %>%
 
 
 
-
 ################################################################################
-#### SMW March 2006 Data Cleaning ##############################################
+#### SMW Jan 2007 Data Cleaning ################################################
 ################################################################################
-SMW <- read.csv("2006March_SMW_raw.csv", skip = 1)
+SMW <- read.csv("2007Jan_SMW_raw.csv", skip = 4)
 
-#cut off extraneous rows to only get cover data
-SMW_cov <- SMW[1:87,]
+##cut out rows 2&3 -> one is blank, the other is for disturbance but has no values
+SMW2 <- SMW[-(2:3),]
+
 
 #transpose the data frame for easier manipulation
-t_SMW <- SMW_cov %>%
+t_SMW <- SMW2 %>%
   t() %>%
   as.data.frame() #save this as a dataframe
 
@@ -96,33 +98,52 @@ colnames(t_SMW) <- col.smw
 #remove first row as it now only contains duplicate info
 SMW_t <- t_SMW[-1,]
 
-#subset again to only get useful data -> remove oddly formatted summary rows
-SMW_t <- SMW_t[1:100,]
+#subset again to only get useful data -> remove blank rows at end
+SMW_t <- SMW_t[1:70,]
 
 #need to clean the names
 SMW_clean <- clean_names(SMW_t, sep_in = "_")
 
+
+##need to fill rows to carry over trap station and type of hit data
+#rename 'x' column (col #5)
+colnames(SMW_clean)[colnames(SMW_clean) == 'x'] <- 'hit_type_plant'
+
+#save blank values of SC_clean as NA in the type.of.hits & trap.station columns 
+#(need NA values for fill function to work, it seems)
+SMW_clean$type.of.hits[SMW_clean$type.of.hits==""] <- NA 
+SMW_clean$trap.station[SMW_clean$trap.station==""] <- NA 
+
+
+#fill type.of.hits column
+SMW_fill <- SMW_clean %>%
+  fill(type.of.hits, .direction = "down") %>%
+  fill(trap.station, .direction = "down")
+
+
+
 #flip to long format
-SMW_long <- pivot_longer(SMW_clean, cols = "bothriochloa.insculpta":"bares_2", names_to = "Species", values_to = "Sp_Pin_Hits")
+SMW_long <- pivot_longer(SMW_fill, cols = "bracharia.lacnantha":"justicia.white", names_to = "Species", values_to = "Sp_Pin_Hits")
 
 SMW_long$Sp_Pin_Hits <- as.numeric(SMW_long$Sp_Pin_Hits) #make the # of pin hits numeric
 
 #make block, date, treatment columns
 SMW_final <- SMW_long %>%
-  mutate(Treatment = "MW", Block = "S", Date = "20060301") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
+  mutate(Treatment = "MW", Block = "S", Date = "20070207") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
+
 
 
 
 ################################################################################
-#### SMWC March 2006 Data Cleaning #############################################
+#### SMWC Jan 2007 Data Cleaning ###############################################
 ################################################################################
-SMWC <- read.csv("2006March_SMWC_raw.csv", skip = 1)
+SMWC <- read.csv("2007Jan_SMWC_raw.csv", skip = 4)
 
-#cut off extraneous rows to only get cover data
-SMWC_cov <- SMWC[1:87,]
+##cut out rows 2&3 -> one is blank, the other is for disturbance but has no values
+SMWC2 <- SMWC[-(2:3),]
 
 #transpose the data frame for easier manipulation
-t_SMWC <- SMWC_cov %>%
+t_SMWC <- SMWC2 %>%
   t() %>%
   as.data.frame() #save this as a dataframe
 
@@ -145,32 +166,51 @@ colnames(t_SMWC) <- col.smwc
 #remove first row as it now only contains duplicate info
 SMWC_t <- t_SMWC[-1,]
 
-#subset again to only get useful data -> remove oddly formatted summary rows
-SMWC_t <- SMWC_t[1:100,]
+#subset again to only get useful data -> remove blank rows at end
+SMWC_t <- SMWC_t[1:70,]
 
 #need to clean the names
 SMWC_clean <- clean_names(SMWC_t, sep_in = "_")
 
+
+##need to fill rows to carry over trap station and type of hit data
+#rename 'x' column (col #5)
+colnames(SMWC_clean)[colnames(SMWC_clean) == 'x'] <- 'hit_type_plant'
+
+#save blank values of SC_clean as NA in the type.of.hits & trap.station columns 
+#(need NA values for fill function to work, it seems)
+SMWC_clean$type.of.hits[SMWC_clean$type.of.hits==""] <- NA 
+SMWC_clean$trap.station[SMWC_clean$trap.station==""] <- NA 
+
+
+#fill type.of.hits column
+SMWC_fill <- SMWC_clean %>%
+  fill(type.of.hits, .direction = "down") %>%
+  fill(trap.station, .direction = "down")
+
+
+
 #flip to long format
-SMWC_long <- pivot_longer(SMWC_clean, cols = "bothriochloa.insculpta":"bares_2", names_to = "Species", values_to = "Sp_Pin_Hits")
+SMWC_long <- pivot_longer(SMWC_fill, cols = "bracharia.lacnantha":"x_4", names_to = "Species", values_to = "Sp_Pin_Hits")
 
 SMWC_long$Sp_Pin_Hits <- as.numeric(SMWC_long$Sp_Pin_Hits) #make the # of pin hits numeric
 
 #make block, date, treatment columns
 SMWC_final <- SMWC_long %>%
-  mutate(Treatment = "MWC", Block = "S", Date = "20060301") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
+  mutate(Treatment = "MW", Block = "S", Date = "20070207") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
+
 
 
 ################################################################################
-#### SO March 2006 Data Cleaning ###############################################
+#### SO Jan 2007 Data Cleaning #################################################
 ################################################################################
-SO <- read.csv("2006March_SO_raw.csv", skip = 1)
+SO <- read.csv("2007Jan_SO_raw.csv", skip = 4)
 
-#cut off extraneous rows to only get cover data
-SO_cov <- SO[1:87,]
+##cut out rows 2&3 -> one is blank, the other is for disturbance but has no values
+SO2 <- SO[-(2:3),]
 
 #transpose the data frame for easier manipulation
-t_SO <- SO_cov %>%
+t_SO <- SO2 %>%
   t() %>%
   as.data.frame() #save this as a dataframe
 
@@ -193,34 +233,51 @@ colnames(t_SO) <- col.so
 #remove first row as it now only contains duplicate info
 SO_t <- t_SO[-1,]
 
-#subset again to only get useful data -> remove oddly formatted summary rows
-SO_t <- SO_t[1:100,]
+#subset again to only get useful data -> remove blank rows at end
+SO_t <- SO_t[1:70,]
 
 #need to clean the names
 SO_clean <- clean_names(SO_t, sep_in = "_")
 
+
+##need to fill rows to carry over trap station and type of hit data
+#rename 'x' column (col #5)
+colnames(SO_clean)[colnames(SO_clean) == 'x'] <- 'hit_type_plant'
+
+#save blank values of SC_clean as NA in the type.of.hits & trap.station columns 
+#(need NA values for fill function to work, it seems)
+SO_clean$type.of.hits[SO_clean$type.of.hits==""] <- NA 
+SO_clean$trap.station[SO_clean$trap.station==""] <- NA 
+
+
+#fill type.of.hits column
+SO_fill <- SO_clean %>%
+  fill(type.of.hits, .direction = "down") %>%
+  fill(trap.station, .direction = "down")
+
+
 #flip to long format
-SO_long <- pivot_longer(SO_clean, cols = "bothriochloa.insculpta":"bares_2", names_to = "Species", values_to = "Sp_Pin_Hits")
+SO_long <- pivot_longer(SO_fill, cols = "bracharia.lacnantha":"x_5", names_to = "Species", values_to = "Sp_Pin_Hits")
 
 SO_long$Sp_Pin_Hits <- as.numeric(SO_long$Sp_Pin_Hits) #make the # of pin hits numeric
 
 #make block, date, treatment columns
 SO_final <- SO_long %>%
-  mutate(Treatment = "O", Block = "S", Date = "20060301") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
+  mutate(Treatment = "O", Block = "S", Date = "20070216") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
 
 
 
 
 ################################################################################
-#### SW March 2006 Data Cleaning ################################################
+#### SW Jan 2007 Data Cleaning #################################################
 ################################################################################
-SW <- read.csv("2006March_SW_raw.csv", skip = 1)
+SW <- read.csv("2007Jan_SW_raw.csv", skip = 4)
 
-#cut off extraneous rows to only get cover data
-SW_cov <- SW[1:87,]
+##cut out rows 2&3 -> one is blank, the other is for disturbance but has no values
+SW2 <- SW[-(2:3),]
 
 #transpose the data frame for easier manipulation
-t_SW <- SW_cov %>%
+t_SW <- SW2 %>%
   t() %>%
   as.data.frame() #save this as a dataframe
 
@@ -243,35 +300,52 @@ colnames(t_SW) <- col.sw
 #remove first row as it now only contains duplicate info
 SW_t <- t_SW[-1,]
 
-#subset again to only get useful data -> remove oddly formatted summary rows
-SW_t <- SW_t[1:100,]
+#subset again to only get useful data -> remove blank rows at end
+SW_t <- SW_t[1:70,]
 
 #need to clean the names
 SW_clean <- clean_names(SW_t, sep_in = "_")
 
+
+##need to fill rows to carry over trap station and type of hit data
+#rename 'x' column (col #5)
+colnames(SW_clean)[colnames(SW_clean) == 'x'] <- 'hit_type_plant'
+
+#save blank values of SC_clean as NA in the type.of.hits & trap.station columns 
+#(need NA values for fill function to work, it seems)
+SW_clean$type.of.hits[SW_clean$type.of.hits==""] <- NA 
+SW_clean$trap.station[SW_clean$trap.station==""] <- NA 
+
+
+#fill type.of.hits column
+SW_fill <- SW_clean %>%
+  fill(type.of.hits, .direction = "down") %>%
+  fill(trap.station, .direction = "down")
+
+
 #flip to long format
-SW_long <- pivot_longer(SW_clean, cols = "bothriochloa.insculpta":"bares_2", names_to = "Species", values_to = "Sp_Pin_Hits")
+SW_long <- pivot_longer(SW_fill, cols = "bracharia.lacnantha":"x_5", names_to = "Species", values_to = "Sp_Pin_Hits")
 
 SW_long$Sp_Pin_Hits <- as.numeric(SW_long$Sp_Pin_Hits) #make the # of pin hits numeric
 
 #make block, date, treatment columns
 SW_final <- SW_long %>%
-  mutate(Treatment = "W", Block = "S", Date = "20060301") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
+  mutate(Treatment = "W", Block = "S", Date = "20070201") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
 
 
 
 
 
 ################################################################################
-#### SWC March 2006 Data Cleaning ##############################################
+#### SWC Jan 2007 Data Cleaning ################################################
 ################################################################################
-SWC <- read.csv("2006March_SWC_raw.csv", skip = 1)
+SWC <- read.csv("2007Jan_SWC_raw.csv", skip = 4)
 
-#cut off extraneous rows to only get cover data
-SWC_cov <- SWC[1:87,]
+##cut out rows 2&3 -> one is blank, the other is for disturbance but has no values
+SWC2 <- SWC[-(2:3),]
 
 #transpose the data frame for easier manipulation
-t_SWC <- SWC_cov %>%
+t_SWC <- SWC2 %>%
   t() %>%
   as.data.frame() #save this as a dataframe
 
@@ -294,20 +368,38 @@ colnames(t_SWC) <- col.swc
 #remove first row as it now only contains duplicate info
 SWC_t <- t_SWC[-1,]
 
-#subset again to only get useful data -> remove oddly formatted summary rows
-SWC_t <- SWC_t[1:100,]
+#subset again to only get useful data -> remove blank rows at end
+SWC_t <- SWC_t[1:70,]
 
 #need to clean the names
 SWC_clean <- clean_names(SWC_t, sep_in = "_")
 
+
+##need to fill rows to carry over trap station and type of hit data
+#rename 'x' column (col #5)
+colnames(SWC_clean)[colnames(SWC_clean) == 'x'] <- 'hit_type_plant'
+
+#save blank values of SC_clean as NA in the type.of.hits & trap.station columns 
+#(need NA values for fill function to work, it seems)
+SWC_clean$type.of.hits[SWC_clean$type.of.hits==""] <- NA 
+SWC_clean$trap.station[SWC_clean$trap.station==""] <- NA 
+
+
+#fill type.of.hits column
+SWC_fill <- SWC_clean %>%
+  fill(type.of.hits, .direction = "down") %>%
+  fill(trap.station, .direction = "down")
+
+
+
 #flip to long format
-SWC_long <- pivot_longer(SWC_clean, cols = "bothriochloa.insculpta":"bares_2", names_to = "Species", values_to = "Sp_Pin_Hits")
+SWC_long <- pivot_longer(SWC_fill, cols = "bracharia.lacnantha":"x_4", names_to = "Species", values_to = "Sp_Pin_Hits")
 
 SWC_long$Sp_Pin_Hits <- as.numeric(SWC_long$Sp_Pin_Hits) #make the # of pin hits numeric
 
 #make block, date, treatment columns
 SWC_final <- SWC_long %>%
-  mutate(Treatment = "WC", Block = "S", Date = "20060301") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
+  mutate(Treatment = "WC", Block = "S", Date = "20070130") #add columns for treatment, block, date (using the first of Feb as sample day is not specified)
 
 
 
@@ -327,9 +419,11 @@ final <- rbind(d, SWC_final)
 unique(final$Treatment)
 unique(final$Block)
 unique(final$Date)
+unique(final$type.of.hits)
+unique(final$trap.station)
 str(final)
 
-write.csv(final, "2006Mar_BlockS.csv", row.names = FALSE)
+write.csv(final, "2007Jan_BlockS.csv", row.names = FALSE)
 
 
 
