@@ -1,0 +1,45 @@
+---
+title: "KLEE_Workflow"
+author: "Carmen Ebel"
+date: "11/22/2020"
+output: html_document
+---
+
+Data QAQC:	
+1)	Working with ‘first hits’ data that is mostly processed. Species names are corrected and grouped together appropriately
+2)	Read in data
+3)	Rename columns as R reads the numbers in and adds an X in front of them. Change to just the numbers 
+4)	Change the data to the long format so that there is only one column with year information and one column with pin hits
+5)	Filter out pin hit values that are NA or 0
+6)	Create a unique ID for each plot as there is no unique identifying plot ID
+a.	Do this by pasting the block and treatment together
+7)	Create a recognizable date format using lubridate
+a.	There is only year, month information – add 01 for the day for every observation
+8)	Take out bare ground observations
+9)	This data frame can now be used in stability, variance ratio, and evenness calculations or for calculating total pin hits (cover)
+10)	Make a separate data frame with only treatment information by selecting each unique block, treatment, and unique ID
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
