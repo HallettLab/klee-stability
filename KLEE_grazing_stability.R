@@ -7,6 +7,7 @@ library(codyn)
 library(zoo)
 library(tsvr)
 library(RColorBrewer)
+library(forcats)
 
 calcSE<-function(x){
   x2<-na.omit(x)
@@ -26,24 +27,24 @@ calcSE<-function(x){
 
 
 #the stability function that I want to apply over the moving window
-community_stability(klee.ts, 
+s <- community_stability(klee_long, 
                     time.var = "Date_numeric", 
-                    abundance.var = "Abundance", 
+                    abundance.var = "Pin_Hits", 
                     replicate.var = "Unique_ID")
 
 
 ## my attempts to apply this over a moving window
-mw_stability <- rollapply(klee.ts, width = 5, FUN = community_stability, klee.ts,
+mw_stability <- rollapply(klee_long, width = 10, FUN = community_stability,
                                           time.var = "Date_numeric", 
-                                          abundance.var = "Abundance", 
+                                          abundance.var = "Pin_Hits", 
                                           replicate.var = "Unique_ID")
 
 
 
 
-mw_stability <- rollapply(klee.ts, width = 20, FUN = function(x) {community_stability(klee.ts,
+mw_stability <- rollapply(klee_long, width = 10, FUN = function(x) {community_stability(x,
                                                                                    time.var = "Date_numeric",
-                                                                                   abundance.var = "Abundance",
+                                                                                   abundance.var = "Pin_Hits",
                                                                                    replicate.var = "Unique_ID")})
 
 mw_stability <- as.data.frame(mw_stability)
@@ -199,6 +200,11 @@ ggplot(meancov, aes(x=Date, y=Mean_Cov, col=Treatment)) +
 
 
 
+
+
+
+
+
 ################################################################################
 #### Calculating Stability Metrics #############################################
 ################################################################################
@@ -231,18 +237,27 @@ mean_stability <- stability %>%
   group_by(TREATMENT) %>%
   summarize(mean_st = mean(stability), SEst = calcSE(stability), mean_cv = mean(CV), SECV = calcSE(CV))
 
+mean_stability$TREATMENT <- as.factor(mean_stability$TREATMENT) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+mean_stability$TREATMENT <- factor(mean_stability$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+
+################################################################################
+#### STABILITY VS. GRAZING PRESSURE. FINAL GRAPH ###############################
 ## visualize mean stability & standard error
 ggplot(mean_stability, aes(x=TREATMENT, y=mean_st)) +
   geom_point() +
   geom_errorbar(aes(ymin = mean_st-SEst, ymax=mean_st+SEst), width = 0.2) +
-  ylab("Stability") + xlab("Treatment") +
+  ylab("Stability (mean/sd)") + xlab("Treatment") +
   theme_classic()
 
-### QUESTION HERE ##############################################################
-### NEED TO CALCULATE HERBIVORE GUILD & GRAZING INTENSITY VARIABLES SOMEHOW?
-##calculate # herbivore guilds
-herb <- stabilitycv %>%
-  mutate(ifelse())
+ggsave("stability_by_treat.pdf", width = 6, height = 4)
+ggsave("stability_by_treat.png", width = 6, height = 4)
+################################################################################
+
+
+
 
 
 
@@ -315,25 +330,38 @@ colnames(gross_synchrony) <- c("Unique_ID", "gross_synchrony") #rename columns
 synchrony <- left_join(loreau_synchrony, gross_synchrony, by = "Unique_ID") #join two synchrony metrics into one data frame
 
 #create one data frame of all 3 synchrony metrics from codyn package
-temp <- left_join(vr_klee, synchrony, by = "Unique_ID")
+###NOT SURE VR SHOULD BE JOINED W/SYNCHRONY METRICS.
+#temp <- left_join(vr_klee, synchrony, by = "Unique_ID")
 
 #calculate mean & SE of metrics to get ready for graphing
-klee_synchrony <- left_join(temp, treats, by = "Unique_ID") %>%
-  pivot_longer(cols = VR:gross_synchrony, names_to = "Metric_Name", values_to = "VR_Synchrony") %>%
+mean_synchrony <- left_join(synchrony, treats, by = "Unique_ID") %>%
+  pivot_longer(cols = loreau_synchrony:gross_synchrony, names_to = "Metric_Name", values_to = "Synchrony") %>%
   group_by(TREATMENT, Metric_Name) %>%
-  summarise(mean_value = mean(VR_Synchrony), SE_value = calcSE(VR_Synchrony))
+  summarise(mean_value = mean(Synchrony), SE_value = calcSE(Synchrony))
 
 
-### Graph Synchrony Metric by Treatment ########################################
-#graph all three metrics together
-ggplot(klee_synchrony, aes(x=TREATMENT, y=mean_value, col = Metric_Name)) +
+
+mean_synchrony$TREATMENT <- as.factor(mean_synchrony$TREATMENT) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+mean_synchrony$TREATMENT <- factor(mean_synchrony$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+
+################################################################################
+### SYNCHRONY & GRAZING FINAL FIGURE ###########################################
+#graph synchrony metrics together
+ggplot(mean_synchrony, aes(x=TREATMENT, y=mean_value, col = Metric_Name)) +
   geom_point() +
   geom_errorbar(aes(ymin = mean_value-SE_value, ymax = mean_value+SE_value), width= 0.075) +
   scale_color_brewer(palette = "Dark2") +
-  ylab("Mean Value") + xlab("Treatment") +
+  ylab("Synchrony") + xlab("Treatment") +
   theme_bw()
 
-ggsave("synchrony_metrics_grazing.pdf", height = 10, width = 10)
+ggsave("synchrony_metrics_grazing.pdf", height = 6, width = 10)
+ggsave("synchrony_metrics_grazing.png", height = 6, width = 10)
+
+################################################################################
+
 
 ## calculate timescale specific VR #############################################
 
@@ -391,6 +419,13 @@ meantsVR <- tsVR %>%
   summarise(meanVR = mean(VR_value), SEVR = calcSE(VR_value))
 
 
+meantsVR$TREATMENT <- as.factor(meantsVR$TREATMENT) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+meantsVR$TREATMENT <- factor(meantsVR$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+
+
 ## Visualize time specific variance ratio
 #VR by VR type, faceted by treatment
 ggplot(meantsVR, aes(x=VR_type, y=meanVR, col = TREATMENT)) +
@@ -409,6 +444,7 @@ ggplot(meantsVR, aes(x=VR_type, y=meanVR, col = TREATMENT)) +
   theme_classic() +
   ylab("Variance Ratio") + xlab("") 
 
+### TSVR & GRAZING TREATMENT FINAL FIGURE ######################################
 ## Best way to visualize this, so far. 
 #variance ratio vs. treatment, grouped by VR type
 ggplot(meantsVR, aes(x=TREATMENT, y=meanVR, col = VR_type)) +
@@ -416,19 +452,39 @@ ggplot(meantsVR, aes(x=TREATMENT, y=meanVR, col = VR_type)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = meanVR-SEVR, ymax = meanVR+SEVR), width = 0.1) +
   theme_classic() +
-  #facet_wrap(~TREATMENT) +
+  scale_color_brewer(palette = "Dark2") +
   ylab("Variance Ratio") + xlab("Treatment")
 
-ggsave("timespecific_VR.pdf", width = 6, height = 4)
+ggsave("timespecific_VR_grazing.pdf", width = 6, height = 4)
+ggsave("timespecific_VR_grazing.png", width = 6, height = 4)
+################################################################################
 
 
 
-### Compare Synchrony & Stability ##############################################
 
-#join stability & synchrony data frames. Not a clean, perfect data frame, will work for initial visualizations
+### Compare VR, Synchrony, & Stability #########################################
+
+#change data frame to long format
+tsvr_long <- tsVR %>%
+  pivot_longer(cols = classicVR:shortVR, names_to = "VR_type", values_to = "VR_value" )
+  
+#join TSVR with stability data frame
+tsvr_stab_all <- inner_join(stability, tsvr_long, by = "Unique_ID")
+
+#plot stability vs. VR to see if they are correlated.
+ggplot(tsvr_stab_all, aes(x=VR_value, y=stability)) +
+  geom_point() +
+  facet_wrap(~VR_type) +
+  ylab("Stability") + xlab("Variance Ratio") +
+  geom_smooth(method = "lm") +
+  theme_bw()
+  
+
+#join mean stability & mean tsVR data frames. Not a clean, perfect data frame, will work for initial visualizations
 tsvr_stab <- inner_join(mean_stability, meantsVR, by = "TREATMENT") 
 
-
+################################################################################
+### TSVR & STABILITY FINAL FIGURE ##############################################
 ggplot(tsvr_stab, aes(x=meanVR, y=mean_st, col = TREATMENT)) +
   geom_point() +
   facet_wrap(~VR_type) +
@@ -438,16 +494,217 @@ ggplot(tsvr_stab, aes(x=meanVR, y=mean_st, col = TREATMENT)) +
   scale_color_brewer(palette = "Dark2") +
   theme_bw()
 
-ggsave("stability_synchrony.pdf", width = 15, height = 5)
+ggsave("stability_tsvr.pdf", width = 15, height = 5)
+ggsave("stability_tsvr.png", width = 15, height = 5)
+################################################################################
+
+
+
+
+
+#synchrony vs. stability
+syn_stab <- inner_join(mean_synchrony, mean_stability, by = "TREATMENT")
+
+
+################################################################################
+### SYNCHRONY & STABILITY FINAL FIGURE #########################################
+ggplot(syn_stab, aes(x=mean_value , y=mean_st, col = TREATMENT, shape = Metric_Name)) +
+  geom_point() +
+  theme_bw() +
+  scale_color_brewer(palette = "Dark2") +
+  geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst), width = 0.005) +
+  geom_errorbarh(aes(xmin = mean_value-SE_value, xmax=mean_value+SE_value), height = 0.1) +
+  ylab("Stability") + xlab("Synchrony") +  
+  scale_shape_manual(values = c(0,16))
+
+ggsave("stability_synchrony.pdf", width = 10, height = 6)
+ggsave("stability_synchrony.png", width = 10, height = 6)
+################################################################################
+
+
+
+
+
 
 
 ################################################################################
 ### Stable Dominance ###########################################################
 ################################################################################
 
+### Calculate evenness metrics #################################################
+
+#calculate simpsons evenness metric (Avolio 2019)
+simps_even <- community_structure(
+  df = klee_long,
+  time.var = "Date_final",
+  abundance.var = "Pin_Hits",
+  replicate.var = "Unique_ID",
+  metric = "SimpsonEvenness"
+)
+
+#calculate Evar evenness metric (Avolio 2019)
+evar_even <- community_structure(
+  df = klee_long,
+  time.var = "Date_final",
+  abundance.var = "Pin_Hits",
+  replicate.var = "Unique_ID",
+  metric = "Evar"
+)
+
+#calculate EQ evenness metric (Avolio 2019)
+eq_even <- community_structure(
+  df = klee_long,
+  time.var = "Date_final",
+  abundance.var = "Pin_Hits",
+  replicate.var = "Unique_ID",
+  metric = "EQ"
+)
+
+
+### Visualize Evenness metrics #################################################
+
+##Simpson's Evenness Index
+#join simpson's evenness with treatment data frame
+even_sim <- inner_join(simps_even, treats, by="Unique_ID")
+
+meansimp_even <- even_sim %>%
+  group_by(TREATMENT) %>%
+  summarise(mean_simp = mean(SimpsonEvenness), SEsimp = calcSE(SimpsonEvenness))
+
+meansimp_even$TREATMENT <- as.factor(meansimp_even$TREATMENT) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+meansimp_even$TREATMENT <- factor(meansimp_even$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+#graph simpson's evenness over time.
+ggplot(even_sim, aes(x=Date_final, y=SimpsonEvenness, col=TREATMENT)) +
+  geom_line() +
+  facet_wrap(~TREATMENT)
+#initial decline in evenness in first few years - could be artifact or treatment response
+#particularly sharp drops in O & C treatments
+
+#graph mean simp even
+ggplot(meansimp_even, aes(x=TREATMENT, y=mean_simp, col=TREATMENT)) +
+  geom_point() +
+  theme_bw() +
+  geom_errorbar(aes(ymin=mean_simp-SEsimp, ymax=mean_simp+SEsimp), width = 0.2)
+
+ 
+
+## Evar Evenness metric
+even_evar <- inner_join(evar_even, treats, by="Unique_ID")
+
+meanevar_even <- even_evar %>%
+  group_by(TREATMENT) %>%
+  summarise(mean_evar = mean(Evar), SE_evar = calcSE(Evar))
+
+meanevar_even$TREATMENT <- as.factor(meanevar_even$TREATMENT) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+meanevar_even$TREATMENT <- factor(meanevar_even$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+#graph Evar evenness over time.
+ggplot(even_evar, aes(x=Date_final, y=Evar, col=TREATMENT)) +
+  geom_line() + 
+  facet_wrap(~TREATMENT)
+
+#
+ggplot(meanevar_even, aes(x=TREATMENT, y=mean_evar, col=TREATMENT)) +
+  geom_point() +
+  theme_bw() +
+  geom_errorbar(aes(ymin=mean_evar-SE_evar, ymax=mean_evar+SE_evar), width = 0.2)
+
+
+
+
+### EQ Evenness metric
+even_eq <- inner_join(eq_even, treats, by="Unique_ID")
+
+meaneq_even <- even_eq %>%
+  group_by(TREATMENT) %>%
+  summarise(mean_eq = mean(EQ), SE_eq = calcSE(EQ))
+
+meaneq_even$TREATMENT <- as.factor(meaneq_even$TREATMENT) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+meaneq_even$TREATMENT <- factor(meaneq_even$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+#graph EQ evenness over time.
+ggplot(even_eq, aes(x=Date_final, y=EQ, col=TREATMENT)) +
+  geom_line() + 
+  facet_wrap(~TREATMENT)
+#both EQ & Evar evenness... O lacks the longer scale fluctuations over time. Interesting.
+
+ggplot(meaneq_even, aes(x=TREATMENT, y=mean_eq, col=TREATMENT)) +
+  geom_point() +
+  theme_bw() +
+  geom_errorbar(aes(ymin=mean_eq-SE_eq, ymax=mean_eq+SE_eq), width = 0.2)
+
+
+
+## EQ & Simpson's evenness metrics show same patterns across treatments. Evar does not. 
+## EQ & Simpson's suggest that more grazing = higher evenness
+## evenness seems to be lowest in O & W treatments 
+
+
+### Evenness and Stability #####################################################
+
+simpeven_stab <- inner_join(meansimp_even, mean_stability, by="TREATMENT")
+
+ggplot(simpeven_stab, aes(x=mean_simp, y=mean_st, col = TREATMENT)) +
+  geom_point() +
+  geom_errorbarh(aes(xmin=mean_simp-SEsimp, xmax=mean_simp+SEsimp)) +
+  geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst)) +
+  ylab("Stability") + xlab("Evenness (Simpson's)") +
+  scale_color_brewer(palette = "Dark2") +
+  theme_bw()
+
+
+
+### Make Rank Abundance Curves? ################################################
 ## rank each species by abundance
 ## calculate rank abundance curve difference & change
 
+## RAC Differences by Treatment ################################################
+RACdiff <- RAC_difference(df = klee_long,
+                          species.var = "SPECIES",
+                          abundance.var = "Pin_Hits",
+                          replicate.var = "Unique_ID",
+                          treatment.var = "TREATMENT",
+                          time.var = "Date_numeric", 
+                          reference.treatment = "MWC"
+                
+)
+
+treats2 <- treats
+names(treats2) <- c("BLOCK", "TREATMENT2", "Unique_ID2")
+
+
+RACdiff_tx <- inner_join(RACdiff, treats2, by = "Unique_ID2") %>%
+  mutate(Date = ymd(Date_numeric)) %>%
+  group_by(Date, TREATMENT2.x) %>%
+  summarise(mean_even = mean(evenness_diff), evenSE = calcSE(evenness_diff))
+
+RACdiff_tx$TREATMENT2.x <- as.factor(RACdiff_tx$TREATMENT2.x) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+RACdiff_tx$TREATMENT2.x <- factor(RACdiff_tx$TREATMENT2.x, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+
+ggplot(RACdiff_tx, aes(x=Date, y=mean_even, col= TREATMENT2.x)) +
+  geom_line() +
+  geom_point() +
+  theme_classic() +
+  ylab("Evenness Compared to MWC") + xlab("") +
+  geom_hline(yintercept = 0, color = "grey", lty = "dashed") +
+  geom_smooth(method = "lm") +
+  facet_wrap(~TREATMENT2.x) +
+  scale_color_brewer(palette = "Dark2") +
+  geom_errorbar(aes(ymin=mean_even-evenSE, ymax=mean_even+evenSE))
+
+
+
+## RAC Changes over time #######################################################
 RAC_timestep <- RAC_change(df = klee_long,
            species.var = "SPECIES",
            abundance.var = "Pin_Hits",
@@ -499,7 +756,7 @@ RAC_time <- inner_join(RAC_timestep, treats, by = "Unique_ID") %>%
   group_by(Date, TREATMENT) %>%
   summarise(mean_even = mean(evenness_change), evenSE = calcSE(evenness_change))
 
-## graph year to year changes in richness
+## graph year to year changes in evenness
 ggplot(RAC_time, aes(x=Date, y=mean_even, col= TREATMENT)) +
   #geom_line() +
   geom_point() +
@@ -511,8 +768,29 @@ ggplot(RAC_time, aes(x=Date, y=mean_even, col= TREATMENT)) +
   scale_color_brewer(palette = "Dark2") +
   geom_errorbar(aes(ymin=mean_even-evenSE, ymax=mean_even+evenSE))
 
-#try out RAC difference function
-RACdiff <- RAC_difference()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ################################################################################
 ### RICHNESS ###################################################################
@@ -561,16 +839,93 @@ ggplot(RAC_sr_time, aes(x=Date, y=mean_SR, col= TREATMENT)) +
 
 
 
-## calculate total species richness across the time series
-
+## calculate total species richness across the time series #####################
 #may need to eventually use presence-absence data (accounts for a lot more rare species)
 totalrich <- klee_long %>%
   group_by(Unique_ID) %>%
-  #filter(Pin_Hits > 0) %>%
-  unique() 
+  select(Unique_ID, SPECIES) %>%
+  unique() %>%
   summarise(totalrich = n())
 
 
-## number of unique species in a plot over time
 
-## calculate some sort of annual diversity metric -> see codyn package for ideas
+rich_stab <- left_join(stability, totalrich, by = "Unique_ID")
+meanrich_stab <- rich_stab %>%
+  group_by(TREATMENT) %>%
+  summarise(mean_st = mean(stability), SEst = calcSE(stability), mean_rich = mean(totalrich), SErich = calcSE(totalrich))
+
+rich_stab$TREATMENT <- as.factor(rich_stab$TREATMENT) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+rich_stab$TREATMENT <- factor(rich_stab$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+#plot stability vs. total richness
+ggplot(rich_stab, aes(x=totalrich, y=stability, col = TREATMENT)) +
+  geom_point()
+
+
+ggplot(rich_stab, aes(x=TREATMENT, y=totalrich, col = TREATMENT)) +
+  geom_point()
+
+ggplot(meanrich_stab, aes(x=TREATMENT, y=mean_rich)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=mean_rich-SErich, ymax=mean_rich+SErich), width = 0.2) +
+  ylab("Total Richness Across Time Series") + xlab("Treatment") +
+  theme_bw()
+#grazing treatments don't appear to produce differences in the total richness across time.
+
+## Calculate Richness at each Time step ########################################
+#calculate richness by grouping by unique ID and date and counting # of observations.
+ann_rich <- klee_long %>%
+  group_by(Unique_ID, Date_final) %>%
+  summarise(richness = n())
+
+ann_rich <- inner_join(ann_rich, treats, by="Unique_ID")
+
+ggplot(ann_rich, aes(x=Date_final, y=richness, col= TREATMENT)) +
+  geom_line() +
+  scale_color_brewer(palette = "Dark2") +
+  theme_bw() +
+  facet_wrap(~TREATMENT)
+
+#calculate the average species richness for each plot then each treatment. Average by plot first then by treatment
+avg_rich <- ann_rich %>%
+  group_by(TREATMENT, Unique_ID) %>%
+  summarise(meanSR_plot = mean(richness)) %>%
+  group_by(TREATMENT) %>%
+  summarise(meanSR_tx = mean(meanSR_plot), SESR_tx = calcSE(meanSR_plot))
+
+ggplot(avg_rich, aes(x=TREATMENT, y=meanSR_tx)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=meanSR_tx-SESR_tx, ymax=meanSR_tx+SESR_tx))
+
+avg_rich2 <- ann_rich %>%
+  group_by(TREATMENT) %>%
+  summarise(meanSR=mean(richness), SESR = calcSE(richness))
+
+################################################################################
+### Verifying the Portfolio Effect #############################################
+
+#subset by unique_ID & species
+
+portfolio_effect <- klee_long %>%
+  filter(!is.na(SPECIES), !is.na(Pin_Hits)) %>%
+  filter(Pin_Hits > 0) %>%
+  group_by(Unique_ID, SPECIES) %>%
+  summarise(variance = var(Pin_Hits, na.rm = TRUE), meanhits = mean(Pin_Hits)) %>%
+  mutate(logvar = log(variance), logmean = log(meanhits))
+#this gives some NA values for variance. Unsure why this is or if this is a problem?
+
+#need to filter out 0 values before linear regression will work.
+portfolio <- portfolio_effect %>%
+  #filter(!is.na(variance), !is.na(logvar), !is.na(logmean)) %>%
+  filter(logvar > 0, logmean > 0)
+
+taylor <- lm(logmean~logvar, data = portfolio)
+
+summary(taylor)
+#check that slope b/w 1-2
+
+ggplot(portfolio, aes(x=logvar, y=logmean)) +
+  geom_point() +
+  geom_smooth(method = "lm")
