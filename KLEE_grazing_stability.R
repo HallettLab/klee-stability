@@ -8,49 +8,12 @@ library(zoo)
 library(tsvr)
 library(RColorBrewer)
 library(forcats)
+library(ggrepel)
 
 calcSE<-function(x){
   x2<-na.omit(x)
   sd(x2)/sqrt(length(x2))
 }
-
-
-################################################################################
-### Calculate Stability over a moving window  ##################################
-################################################################################
-
-#I'm wondering if a data frame is not the right thing to feed into these functions?
-#here I'm just removing unnecessary components from the data frame in case these 
-#are confusing the function
-#I will eventually move some of this to the data cleaning script.
-
-
-
-#the stability function that I want to apply over the moving window
-s <- community_stability(klee_long, 
-                    time.var = "Date_numeric", 
-                    abundance.var = "Pin_Hits", 
-                    replicate.var = "Unique_ID")
-
-
-## my attempts to apply this over a moving window
-mw_stability <- rollapply(klee_long, width = 10, FUN = community_stability,
-                                          time.var = "Date_numeric", 
-                                          abundance.var = "Pin_Hits", 
-                                          replicate.var = "Unique_ID")
-
-
-
-
-mw_stability <- rollapply(klee_long, width = 10, FUN = function(x) {community_stability(x,
-                                                                                   time.var = "Date_numeric",
-                                                                                   abundance.var = "Pin_Hits",
-                                                                                   replicate.var = "Unique_ID")})
-
-mw_stability <- as.data.frame(mw_stability)
-
-
-
 
 
 ################################################################################
@@ -68,15 +31,15 @@ klee_totcov <- klee_long %>%
 ## Get data ready to graph as a time series
 meantotcov <- klee_totcov %>%
   group_by(TREATMENT, Date_final) %>% #group by treatment & date
-  summarize(Mean_TotCov = mean(totcov)) #calculate the mean total cover at each treatment & date
+  summarize(meancov = mean(totcov), SEcov = calcSE(totcov)) #calculate the mean total cover at each treatment & date
 
 ## Graph! 
 
 ## FINAL GRAPH #################################################################
 #graph the time series - all treatments in one plot
-ggplot(meantotcov, aes(x=Date_final, y=Mean_TotCov, col=TREATMENT)) +
+ggplot(meantotcov, aes(x=Date_final, y=meancov, col=TREATMENT)) +
   geom_line(size = 0.5) +
-  geom_point(aes(y=Mean_TotCov)) +
+  geom_point(aes(y=meancov)) +
   scale_color_brewer(palette = "Dark2") +
   scale_shape_manual(values = c("1")) +
   theme_classic() +
@@ -90,7 +53,7 @@ ggsave("totalcov_calc_by_year.png", width = 10, height = 6)
 ## OTHER VISUALIZATIONS
 #separate by treatment to more easily view overlapping lines
 ggplot(meantotcov, aes(x=Date_final)) +
-  geom_line(aes(y=Mean_TotCov, col=TREATMENT)) +
+  geom_line(aes(y=meancov, col=TREATMENT)) +
   theme_bw() +
   ylab("Mean Total Cover") + xlab("Date") +
   facet_wrap(~TREATMENT)
@@ -98,7 +61,7 @@ ggplot(meantotcov, aes(x=Date_final)) +
 ggsave("totalcov_calc_sep_lines.pdf", width = 10, height = 6)
 
 #graph as scatterplot
-ggplot(meantotcov, aes(x=Date_final, y=Mean_TotCov, col=TREATMENT)) + 
+ggplot(meantotcov, aes(x=Date_final, y=meancov, col=TREATMENT)) + 
   geom_point() +
   facet_wrap(~TREATMENT) +
   ylab("Mean Total Cover") + xlab("Date") +
@@ -106,6 +69,80 @@ ggplot(meantotcov, aes(x=Date_final, y=Mean_TotCov, col=TREATMENT)) +
 
 ggsave("totalcov_calc_scatterplot.pdf", width = 10, height = 6)
 
+
+
+################################################################################
+### Calculate Stability over a moving window  ##################################
+################################################################################
+
+#I'm wondering if a data frame is not the right thing to feed into these functions?
+#here I'm just removing unnecessary components from the data frame in case these 
+#are confusing the function
+#I will eventually move some of this to the data cleaning script.
+
+uni <- unique(klee_long$Unique_ID) #make vector of unique plots
+
+
+for (i in 1:length(uni)) {
+  
+  
+  
+  mean()
+  
+}
+
+#mean/sd
+mean(klee_long$SPECIES)
+
+#the stability function that I want to apply over the moving window
+s <- community_stability(klee_long, 
+                         time.var = "Date_numeric", 
+                         abundance.var = "Pin_Hits", 
+                         replicate.var = "Unique_ID")
+
+
+## my attempts to apply this over a moving window
+mw_stability <- rollapply(klee_long, width = 10, FUN = community_stability,
+                          time.var = "Date_numeric", 
+                          abundance.var = "Pin_Hits", 
+                          replicate.var = "Unique_ID")
+
+
+
+
+mw_stability <- rollapply(klee_long, width = 10, FUN = function(x) {community_stability(x,
+                                                                                        time.var = "Date_numeric",
+                                                                                        abundance.var = "Pin_Hits",
+                                                                                        replicate.var = "Unique_ID")})
+
+mw_stability <- as.data.frame(mw_stability)
+
+
+
+
+################################################################################
+### Explore standing biomass & grazing pressure ################################
+################################################################################
+
+#total biomass by grazing treatment.
+avg_biomass <- meantotcov %>%
+  group_by(TREATMENT) %>%
+  summarize(avgbio = mean(meancov), SEbio = calcSE(meancov))
+
+avg_biomass$TREATMENT <- as.factor(avg_biomass$TREATMENT) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+avg_biomass$TREATMENT <- factor(avg_biomass$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+png("./figures/totcover_by_grazing.png", height = 550, width = 800)
+
+ggplot(avg_biomass, aes(x=TREATMENT, y=avgbio)) +
+  geom_point() +
+  theme_bw() +
+  geom_errorbar(aes(ymin=avgbio-SEbio, ymax=avgbio+SEbio), width = 0.2) +
+  ylab("Total Pin Hits (Biomass Proxy)") + xlab("Treatment")
+
+ggsave("./figures/totcover_by_grazing.png", height = 4, width = 6)
 
 ################################################################################
 #### Explore Existing Total Cover Data #########################################
@@ -249,16 +286,12 @@ mean_stability$TREATMENT <- factor(mean_stability$TREATMENT, levels = c("0", "W"
 ggplot(mean_stability, aes(x=TREATMENT, y=mean_st)) +
   geom_point() +
   geom_errorbar(aes(ymin = mean_st-SEst, ymax=mean_st+SEst), width = 0.2) +
-  ylab("Stability (mean/sd)") + xlab("Treatment") +
+  ylab("Stability (mean/sd)") + xlab("") +
   theme_classic()
 
 ggsave("stability_by_treat.pdf", width = 6, height = 4)
 ggsave("stability_by_treat.png", width = 6, height = 4)
 ################################################################################
-
-
-
-
 
 
 ################################################################################
@@ -365,6 +398,7 @@ ggsave("synchrony_metrics_grazing.png", height = 6, width = 10)
 
 ## calculate timescale specific VR #############################################
 
+### 4 YEARS ####################################################################
 #set up data frame to put tsvr into
 outnames <- c("Unique_ID", "TREATMENT", "classicVR", "longVR", "shortVR")
 siteout <- as.data.frame(matrix(nrow=0, ncol = 5)) 
@@ -417,6 +451,83 @@ meantsVR <- tsVR %>%
   pivot_longer(cols = classicVR:shortVR, names_to = "VR_type", values_to = "VR_value" ) %>% 
   group_by(TREATMENT, VR_type) %>%
   summarise(meanVR = mean(VR_value), SEVR = calcSE(VR_value))
+
+################################################################################
+
+
+### 2 YEARS ####################################################################
+#set up data frame to put tsvr into
+outnames2 <- c("Unique_ID", "TREATMENT", "classicVR", "longVR", "shortVR")
+siteout2 <- as.data.frame(matrix(nrow=0, ncol = 5)) 
+names(siteout2) <- outnames2
+plots.2 <- unique(klee_long$Unique_ID)
+
+
+for (i in 1:length(plots.2)) {
+  
+  #subset by replicate (gives all observations from one plot over time)
+  plot.2 <- subset(klee_long, Unique_ID == plots.2[i]) %>%
+    tbl_df()
+  
+  #select species and fill 0's 
+  plot2.2 <- plot.2 %>%
+    select(Date_numeric, SPECIES, Pin_Hits) %>% #selecting only these three columns
+    spread(SPECIES, Pin_Hits, fill = 0) #changing to wide format
+  
+  #transpose the data 
+  dat.2 <- t(as.matrix(plot2.2[,2:dim(plot2.2)[2]]))
+  
+  #create a dataframe with replicate info to attach VR metrics to
+  VR_plots.2 <- plot.2 %>%
+    select(Unique_ID, TREATMENT, BLOCK) %>%
+    unique()
+  
+  #calculate tsvr
+  res0.2 <- vreq_classic(dat.2)
+  VR_plots.2$classicVR <- res0.2[[3]]
+  
+  #attach classic VR?
+  res.2 <- tsvreq_classic(dat.2)
+  
+  #aggregate short vs. long
+  resLong.2 <- aggts(res.2, res.2$ts[res.2$ts>=3]) #grabbing tsvr with time period >= 3 years
+  resShort.2 <- aggts(res.2, res.2$ts[res.2$ts<3]) #grabbing tsvr with time period < 3 years
+  
+  #attach short & long
+  VR_plots.2$longVR <- resLong.2[[3]]
+  VR_plots.2$shortVR <- resShort.2[[3]]
+  
+  #append to external dataframe
+  siteout2 <- rbind(siteout2, VR_plots.2)
+}
+#rename 
+tsVR.2 <- siteout2
+
+
+
+## calculate the mean and sd of tsvr
+meantsVR.2 <- tsVR.2 %>%
+  pivot_longer(cols = classicVR:shortVR, names_to = "VR_type", values_to = "VR_value" ) %>% 
+  group_by(TREATMENT, VR_type) %>%
+  summarise(meanVR = mean(VR_value), SEVR = calcSE(VR_value))
+
+################################################################################
+
+meantsVR.2$TREATMENT <- as.factor(meantsVR.2$TREATMENT) #change treatment to factor
+
+#reorder treatments to match grazing pressure.
+meantsVR.2$TREATMENT <- factor(meantsVR.2$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+
+#variance ratio vs. VR type, grouped by treatment
+ggplot(meantsVR.2, aes(x=TREATMENT, y=meanVR, col = VR_type)) +
+  geom_hline(yintercept = 1, color = "grey", lty = "dashed") +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = meanVR-SEVR, ymax = meanVR+SEVR), width = 0.1) +
+  theme_classic() +
+  ylab("Variance Ratio") + xlab("")
+  #facet_wrap(~TREATMENT)
+
 
 
 meantsVR$TREATMENT <- as.factor(meantsVR$TREATMENT) #change treatment to factor
@@ -505,6 +616,8 @@ ggsave("stability_tsvr.png", width = 15, height = 5)
 #synchrony vs. stability
 syn_stab <- inner_join(mean_synchrony, mean_stability, by = "TREATMENT")
 
+syn_stab2 <- syn_stab %>%
+  filter(Metric_Name == "loreau_synchrony")
 
 ################################################################################
 ### SYNCHRONY & STABILITY FINAL FIGURE #########################################
@@ -522,9 +635,36 @@ ggsave("stability_synchrony.png", width = 10, height = 6)
 ################################################################################
 
 
+################################################################################
+### SYNCHRONY & STABILITY FINAL FIGURE #########################################
+ggplot(syn_stab2, aes(x=mean_value , y=mean_st, col = TREATMENT)) +
+  geom_point() +
+  theme_bw() +
+  scale_color_brewer(palette = "Dark2") +
+  geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst), width = 0.005) +
+  geom_errorbarh(aes(xmin = mean_value-SE_value, xmax=mean_value+SE_value), height = 0.1) +
+  ylab("Stability") + xlab("Synchrony") +  
+  scale_shape_manual(values = c(0,16))
+
+#ggsave("stability_synchrony.pdf", width = 10, height = 6)
+ggsave("stability_loreau_synchrony.png", width = 6, height = 4)
+################################################################################
 
 
+################################################################################
+### SYNCHRONY & Grazing Tx FINAL FIGURE ########################################
+ggplot(syn_stab2, aes(x=TREATMENT , y=mean_value)) +
+  geom_point() +
+  theme_bw() +
+  scale_color_brewer(palette = "Dark2") +
+  #geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst), width = 0.005) +
+  geom_errorbar(aes(ymin = mean_value-SE_value, ymax=mean_value+SE_value), width = 0.3) +
+  ylab("Synchrony") + xlab("") +  
+  scale_shape_manual(values = c(0,16))
 
+#ggsave("stability_synchrony.pdf", width = 10, height = 6)
+ggsave("loreau_synchrony_treatment.png", width = 6, height = 4)
+################################################################################
 
 
 ################################################################################
@@ -660,9 +800,438 @@ ggplot(simpeven_stab, aes(x=mean_simp, y=mean_st, col = TREATMENT)) +
   theme_bw()
 
 
+################################################################################
+
+### Calculate Berger-Parker Dominance ##########################################
+
+#BP dominance: d = Nmax/N (relative abundance of most dominant species)
+BP_dom <- klee_long %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>%
+  mutate(rank = rank(Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
+  mutate(tot_abund = sum(Pin_Hits)) %>% #calculate total abundance
+  filter(rank == max(rank)) %>% #only include most abundant species in each plot
+  summarise(BP_dominance = Pin_Hits/tot_abund) %>% #calculate Berger-Parker dominance index
+  group_by(TREATMENT, Date_final) %>%
+  summarise(mean_dom = mean(BP_dominance), SEdom = calcSE(BP_dominance))
+
+#reorder treatments to match grazing pressure.
+BP_dom$TREATMENT <- as.factor(BP_dom$TREATMENT) #change treatment to factor
+BP_dom$TREATMENT <- factor(BP_dom$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+
+
+
+## Graph dominance over time ###################################################
+ggplot(BP_dom, aes(x=Date_final, y=mean_dom, col=TREATMENT)) +
+  geom_line() +
+  theme_bw() +
+  scale_color_brewer(palette = "Dark2") +
+  ylab("Berger-Parker Dominance") + xlab("Date")
+ggsave("dominance_over_time.pdf", width = 6, height = 4)
+ggsave("dominance_over_time.png", width = 8, height = 4)
+
+avg_BPdom <- BP_dom %>%
+  group_by(TREATMENT) %>%
+  summarise(avg_dom = mean(mean_dom), SE = calcSE(mean_dom))
+
+
+ggplot(avg_BPdom, aes(x=TREATMENT, y=avg_dom)) +
+  geom_point() +
+  theme_bw() +
+  scale_color_brewer(palette = "Dark2") +
+  ylab("Berger-Parker Dominance") + xlab("Treatment") +
+  geom_errorbar(aes(ymin=avg_dom-SE, ymax=avg_dom+SE), width=0.2)
+ggsave("dominance_treat.pdf", width = 4, height = 3)
+ggsave("dominance_treat.png", width = 4, height = 3)
+
+
+dom_stab <- inner_join(mean_stability, avg_BPdom, by = "TREATMENT")
+
+ggplot(dom_stab, aes(x=avg_dom, y=mean_st, col=TREATMENT)) +
+  geom_point() +
+  theme_bw() +
+  scale_color_brewer(palette = "Dark2") +
+  ylab("Stability") + xlab("Berger-Parker Dominance") +
+  geom_errorbarh(aes(xmin=avg_dom-SE, xmax=avg_dom+SE)) +
+  geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst))
+ggsave("dominance_stability.pdf", width = 6, height = 4)
+ggsave("dominance_stability.png", width = 6, height = 4)
+
+
+
+
+################################################################################
+### Calculate ranks & dominant species stability & compensatory dynamics #######
+
+## rank species in order of abundance with 1 being most abundant.
+rankneg <- klee_long %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>%
+  mutate(rank = rank(-Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
+  mutate(tot_abund = sum(Pin_Hits)) #calculate total abundance
+
+
+
+
+### O Treatment ################################################################
+#filter for species with top 5 highest abundance in any year in 0 treatment
+rank5O <- rankneg %>%
+  filter(rank  < 6, TREATMENT == "0")
+
+#make a time series of the dominant species in control plots
+#make a list of species
+O.species <- unique(rank5O$SPECIES)
+
+#filter to include only these species in the 0 treatment
+O <- rankneg %>%
+  filter(SPECIES %in% O.species, TREATMENT == "0")
+
+meanO <- O %>%
+  group_by(Date_final, SPECIES) %>%
+  summarise(meanhits = mean(Pin_Hits))
+
+#visualize species over time
+ggplot(meanO, aes(x=Date_final, y=meanhits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  #facet_wrap(~Unique_ID) +
+  theme_classic()
+
+## calculate species stability 
+O.spstab <- O %>%
+  group_by(BLOCK, SPECIES) %>%
+  summarise(temp_mean = mean(Pin_Hits), sdhits = sd(Pin_Hits), sp_stability = temp_mean/sdhits)
+
+## Plot species stability of any species that was in top 5 most abundant species throughout time series
+ggplot(O.spstab, aes(x=SPECIES, y=sp_stability, col=SPECIES)) +
+  geom_boxplot() +
+  theme_classic() +
+  ylab("Species Stability")
+  
+
+## calculate compensatory dynamics among species
+O.vr <- variance_ratio(
+  O,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  bootnumber = 10000, #used this as large bootnumber was recommended
+  replicate.var = "Unique_ID",
+  average.replicates = FALSE,
+  level = 0.95,
+)
+  
+head(O.vr)
+
+
+
+### W Treatment ################################################################
+rank5W <- rankneg %>%
+  filter(rank  < 6, TREATMENT == "W")
+
+ggplot(rank5W, aes(x=Date_final, y=Pin_Hits, col=SPECIES)) +
+  geom_point() 
+
+#make a time series of the dominant species in control plots
+#make a list of species
+W.species <- unique(rank5W$SPECIES)
+
+W <- rankneg %>%
+  filter(SPECIES %in% W.species, TREATMENT == "W")
+
+ggplot(W, aes(x=Date_final, y=Pin_Hits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  #facet_wrap(~Unique_ID) +
+  theme_classic()
+
+
+meanW <- W %>% 
+  group_by(Date_final, SPECIES) %>%
+  summarise(meanhits = mean(Pin_Hits))
+
+ggplot(meanW, aes(x=Date_final, y=meanhits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  theme_classic()
+
+
+## calculate species stability 
+W.spstab <- W %>%
+  group_by(BLOCK, SPECIES) %>%
+  summarise(temp_mean = mean(Pin_Hits), sdhits = sd(Pin_Hits), sp_stability = temp_mean/sdhits)
+
+ggplot(W.spstab, aes(x=SPECIES, y=sp_stability, col = SPECIES)) +
+  geom_boxplot()
+
+
+## calculate compensatory dynamics among species
+W.vr <- variance_ratio(
+  W,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  bootnumber = 10000, #used this as large bootnumber was recommended
+  replicate.var = "Unique_ID",
+  average.replicates = FALSE,
+  level = 0.95,
+)
+
+head(W.vr)
+
+
+### MW Treatment ###############################################################
+rank5MW <- rankneg %>%
+  filter(rank  < 6, TREATMENT == "MW")
+
+ggplot(rank5MW, aes(x=Date_final, y=Pin_Hits, col=SPECIES)) +
+  geom_point() 
+
+#make a time series of the dominant species in control plots
+#make a list of species
+MW.species <- unique(rank5MW$SPECIES)
+
+MW <- rankneg %>%
+  filter(SPECIES %in% MW.species, TREATMENT == "MW")
+
+ggplot(MW, aes(x=Date_final, y=Pin_Hits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  #facet_wrap(~Unique_ID) +
+  theme_classic()
+
+meanMW <- MW %>% 
+  group_by(Date_final, SPECIES) %>%
+  summarise(meanhits = mean(Pin_Hits))
+
+ggplot(meanMW, aes(x=Date_final, y=meanhits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  theme_classic()
+
+
+## calculate species stability 
+MW.spstab <- MW %>%
+  group_by(BLOCK, SPECIES) %>%
+  summarise(temp_mean = mean(Pin_Hits), sdhits = sd(Pin_Hits), sp_stability = temp_mean/sdhits)
+
+ggplot(MW.spstab, aes(x=SPECIES, y=sp_stability, col = SPECIES)) +
+  geom_boxplot()
+
+
+## calculate compensatory dynamics among species
+MW.vr <- variance_ratio(
+  MW,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  bootnumber = 10000, #used this as large bootnumber was recommended
+  replicate.var = "Unique_ID",
+  average.replicates = FALSE,
+  level = 0.95,
+)
+
+head(MW.vr)
+
+
+### C Treatment ################################################################
+
+rank5C <- rankneg %>%
+  filter(rank  < 6, TREATMENT == "C")
+
+ggplot(rank5C, aes(x=Date_final, y=Pin_Hits, col=SPECIES)) +
+  geom_point() 
+
+#make a time series of the dominant species in control plots
+#make a list of species
+C.species <- unique(rank5C$SPECIES)
+
+C <- rankneg %>%
+  filter(SPECIES %in% C.species, TREATMENT == "C")
+
+ggplot(C, aes(x=Date_final, y=Pin_Hits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  #facet_wrap(~Unique_ID) +
+  theme_classic()
+
+meanC <- C %>% 
+  group_by(Date_final, SPECIES) %>%
+  summarise(meanhits = mean(Pin_Hits))
+
+ggplot(meanC, aes(x=Date_final, y=meanhits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  theme_classic()
+
+
+## calculate species stability 
+C.spstab <- C %>%
+  group_by(BLOCK, SPECIES) %>%
+  summarise(temp_mean = mean(Pin_Hits), sdhits = sd(Pin_Hits), sp_stability = temp_mean/sdhits)
+
+ggplot(C.spstab, aes(x=SPECIES, y=sp_stability, col = SPECIES)) +
+  geom_boxplot()
+
+
+## calculate compensatory dynamics among species
+C.vr <- variance_ratio(
+  C,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  bootnumber = 10000, #used this as large bootnumber was recommended
+  replicate.var = "Unique_ID",
+  average.replicates = FALSE,
+  level = 0.95,
+)
+
+head(C.vr)
+
+
+### WC Treatment ###############################################################
+rank5WC <- rankneg %>%
+  filter(rank  < 6, TREATMENT == "WC")
+
+ggplot(rank5WC, aes(x=Date_final, y=Pin_Hits, col=SPECIES)) +
+  geom_point() 
+
+#make a time series of the dominant species in control plots
+#make a list of species
+WC.species <- unique(rank5WC$SPECIES)
+
+WC <- rankneg %>%
+  filter(SPECIES %in% WC.species, TREATMENT == "WC")
+
+ggplot(WC, aes(x=Date_final, y=Pin_Hits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  #facet_wrap(~Unique_ID) +
+  theme_classic()
+
+meanWC <- WC %>% 
+  group_by(Date_final, SPECIES) %>%
+  summarise(meanhits = mean(Pin_Hits))
+
+ggplot(meanWC, aes(x=Date_final, y=meanhits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  theme_classic()
+
+
+## calculate species stability 
+WC.spstab <- WC %>%
+  group_by(BLOCK, SPECIES) %>%
+  summarise(temp_mean = mean(Pin_Hits), sdhits = sd(Pin_Hits), sp_stability = temp_mean/sdhits)
+
+ggplot(WC.spstab, aes(x=SPECIES, y=sp_stability, col = SPECIES)) +
+  geom_boxplot()
+
+
+## calculate compensatory dynamics among species
+WC.vr <- variance_ratio(
+  WC,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  bootnumber = 10000, #used this as large bootnumber was recommended
+  replicate.var = "Unique_ID",
+  average.replicates = FALSE,
+  level = 0.95,
+)
+
+head(WC.vr)
+
+
+### MWC Treatment ##############################################################
+
+rank5MWC <- rankneg %>%
+  filter(rank  < 6, TREATMENT == "MWC")
+
+ggplot(rank5MWC, aes(x=Date_final, y=Pin_Hits, col=SPECIES)) +
+  geom_point() 
+
+#make a time series of the dominant species in control plots
+#make a list of species
+MWC.species <- unique(rank5MWC$SPECIES)
+
+MWC <- rankneg %>%
+  filter(SPECIES %in% MWC.species, TREATMENT == "MWC")
+
+ggplot(MWC, aes(x=Date_final, y=Pin_Hits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  #facet_wrap(~Unique_ID) +
+  theme_classic()
+
+meanMWC <- MWC %>% 
+  group_by(Date_final, SPECIES) %>%
+  summarise(meanhits = mean(Pin_Hits))
+
+ggplot(meanMWC, aes(x=Date_final, y=meanhits, col = SPECIES)) +
+  geom_point() +
+  geom_line() +
+  theme_classic()
+
+
+## calculate species stability 
+MWC.spstab <- MWC %>%
+  group_by(BLOCK, SPECIES) %>%
+  summarise(temp_mean = mean(Pin_Hits), sdhits = sd(Pin_Hits), sp_stability = temp_mean/sdhits)
+
+ggplot(MWC.spstab, aes(x=SPECIES, y=sp_stability, col = SPECIES)) +
+  geom_boxplot()
+
+
+## calculate compensatory dynamics among species
+MWC.vr <- variance_ratio(
+  MWC,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  bootnumber = 10000, #used this as large bootnumber was recommended
+  replicate.var = "Unique_ID",
+  average.replicates = FALSE,
+  level = 0.95,
+)
+
+head(MWC.vr)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Make Rank Abundance Curves? ################################################
 ## rank each species by abundance
+RAC <- klee_long %>%
+  group_by(Unique_ID, Date_final) %>%
+  mutate(rank = rank(Pin_Hits, na.last = NA, ties.method = "average"))
+
+
+top5 <- RAC %>%
+  filter(rank < 6, TREATMENT == "0")
+
+top3 <- RAC %>%
+  filter(rank < 3, TREATMENT == "0")
+
+top <- RAC %>%
+  filter(rank < 2, TREATMENT == "0")
+
+# create a rank abundance curve
+
+ggplot(RAC_O_1st, aes(x=rank, y=Pin_Hits)) +
+  geom_point() +
+  geom_text(aes(label=SPECIES),hjust=0, vjust=0)
+
+
 ## calculate rank abundance curve difference & change
 
 ## RAC Differences by Treatment ################################################
@@ -874,6 +1443,14 @@ ggplot(meanrich_stab, aes(x=TREATMENT, y=mean_rich)) +
   theme_bw()
 #grazing treatments don't appear to produce differences in the total richness across time.
 
+
+ggplot(meanrich_stab, aes(x=mean_rich, y=mean_st, col=TREATMENT)) +
+  geom_point() +
+  theme_bw() +
+  geom_errorbarh(aes(xmin=mean_rich-SErich, xmax=mean_rich+SErich))
+
+
+
 ## Calculate Richness at each Time step ########################################
 #calculate richness by grouping by unique ID and date and counting # of observations.
 ann_rich <- klee_long %>%
@@ -897,7 +1474,11 @@ avg_rich <- ann_rich %>%
 
 ggplot(avg_rich, aes(x=TREATMENT, y=meanSR_tx)) +
   geom_point() +
-  geom_errorbar(aes(ymin=meanSR_tx-SESR_tx, ymax=meanSR_tx+SESR_tx))
+  geom_errorbar(aes(ymin=meanSR_tx-SESR_tx, ymax=meanSR_tx+SESR_tx)) +
+  ylab("Average Species Richness") + xlab("") +
+  theme_bw()
+ggsave("avg_rich_treatment.png", width = 6, height=4)
+
 
 avg_rich2 <- ann_rich %>%
   group_by(TREATMENT) %>%
@@ -921,11 +1502,13 @@ portfolio <- portfolio_effect %>%
   #filter(!is.na(variance), !is.na(logvar), !is.na(logmean)) %>%
   filter(logvar > 0, logmean > 0)
 
-taylor <- lm(logmean~logvar, data = portfolio)
+#flipped variance and mean around, slope is now in the correct range.
+taylor <- lm(logvar~logmean, data = portfolio)
 
 summary(taylor)
 #check that slope b/w 1-2
+#slope is 1.90052
 
-ggplot(portfolio, aes(x=logvar, y=logmean)) +
+ggplot(portfolio, aes(x= logmean, y= logvar)) +
   geom_point() +
   geom_smooth(method = "lm")

@@ -1,0 +1,802 @@
+---
+title: "The top down control of stability by herbivores: all work shown"
+author: "Carmen Ebel"
+date: "12/09/2020"
+output: html_document
+---
+
+# Literature Review {-}
+
+Understanding the mechanisms that maintain community stability is a central question in ecology. As anthropogenic drivers alter biotic and abiotic processes in ecosystems (Ripple et al. 2015), it is increasingly important to identify how this impacts stability and the strength of stabilizing mechanisms. Although there are many definitions of stability, we focus on the temporal stability of biomass production – defined as the temporal mean divided by the temporal standard deviation – as it relates to important ecosystem functions such as productivity, soil carbon storage, and forage production (Tilman 1999).
+
+
+Ecosystem processes can be stabilized by a variety of biotic mechanisms, including species interactions and diversity. In particular, the roles of compensatory dynamics and species diversity have received much focus and debate (Hooper et al. 2005; Gonzalez and Loreau 2009). Compensatory dynamics stem from species in a community displaying different responses to variation in the environment. When these fluctuations in species populations are asynchronous, they stabilize the community, so although each species experiences population growth and decline, the community stays relatively constant as species trade off over time (Gonzalez and Loreau, 2009). Alternatively, when fluctuations are synchronous this enhances the variability in the community (Gonzalez and Loreau, 2009). 
+
+
+Diversity mediated effects on stability are likely due to the ‘portfolio effect’, where the community as a whole is less variable than its individual species due to the effects of statistical averaging (Doak et al. 1998; Tilman 1998; Schindler et al. 2015). Therefore, stability of an aggregate variable – such as biomass production – increases as diversity increases. Having a diverse assemblage of species can stabilize a community as there is a better chance that some species will maintain functioning through environmental fluctuations, even if others fail (Yachi and Loreau 1999). 
+
+
+Although the portfolio effect may be observed in communities with relatively even species abundances, communities with highly uneven species abundances can be disproportionately influenced by the stability of the dominant species (Doak et al. 1998). Species with high abundances tend to also have high variance (Grman et al. 2010), therefore selection for a dominant species will only stabilize the community if the species is both abundant and has a stable population over time.
+
+
+As stability mechanisms are empirically tested and observed, it is becoming increasingly clear that they are context dependent (Grman et al. 2010; Hallett et al. 2014; Hautier et al. 2020). Bottom-up controls such as water or nutrient availability can influence the presence and strength of stabilizing mechanisms (Hallett et al. 2014; Hautier et al. 2020). For example, when exploring the role of precipitation in community stability, Hallett et al. found that diversity associated portfolio effects increased at sites with high mean annual precipitation, while strong negative species covariances were observed where precipitation variability was high (Hallett et al. 2014). Additionally, nutrient addition reduced compensatory dynamics and diversity compared to unfertilized communities (Hautier et al. 2020).
+
+
+While there is accumulating evidence for bottom-up controls on stabilizing mechanisms, top-down control by herbivores might also influence these mechanisms, but has been relatively unexplored, especially in terrestrial systems. In lakes, the richness of zooplankton grazers indirectly impacted stability through changes in phytoplankton diversity and synchrony (Fu et al. 2020). Total grazing pressure also produced changes in synchrony as well as community dominance, which indirectly impacted stability (Fu et al. 2020). Compensatory dynamics were stabilizing in lakes with high N and high grazer richness. The portfolio effect increased stability where there was low N and high grazer richness (Fu et al. 2020).
+
+
+The effects of herbivory on stability mechanisms will likely be mediated through effects on plant species diversity, evenness, and composition. In systems where herbivores consume abundant species and reduce their prevalence, plant species diversity can increase as this frees additional resources to support new species (Koerner et al. 2018, Hillebrand et al. 2007). Therefore, loss of herbivores could result in reduced plant species diversity or increased dominance by one or a few species. Indeed, previous work on the Kenya Long-term Exclosure Experiment (KLEE) has shown that excluding different groups of herbivores resulted in divergent plant communities in all treatments (Veblen et al. 2016; Riginos et al. 2018). Additionally, there was greater resistance to composition changes in treatments with cattle and wild herbivores (Riginos et al. 2018), indicating that these communities may be more stable.
+
+
+Here I will use the KLEE dataset to examine the stability of aggregate processes - here total cover as a proxy for production - through time and under different grazing regimes. This dataset contains 20 years of herbaceous vegetation data from 6 replicated herbivore exclusion treatments in a semi-arid Kenyan savanna ecosystem. I will use this long-term experiment to ask first, does the stability of total cover vary along a gradient of grazing intensity? And second, do stability mechanisms change with varying intensity of herbivory? Although there are separate predictions for each mechanism, they are not exclusive as it is possible that multiple stabilizing mechanisms could operate simultaneously.
+
+
+
+**Hypothesis 1: Stability**
+
+We hypothesize that herbivore exclusion will reduce the stability of biomass production, as communities with a diverse suite of herbivores had greater species diversity and showed greater resistance to compositional changes over the long term (Riginos et al. 2018). 
+
+
+
+**Hypothesis 2: Portfolio Effect**
+
+As herbivory increases diversity when herbivores consume the dominant species (Koerner et al. 2018), we hypothesize that herbivore exclusion will reduce plant species diversity and therefore reduce stability. 
+
+
+
+**Hypothesis 3: Compensatory dynamics**
+
+As compensatory and synchronous dynamics are shaped by multiple drivers at different timescales, it is possible for compensatory dynamics and synchrony to occur at different timescales within the same community (Shoemaker & Hallett, in review; Zhao et al. 2020). Therefore, we hypothesize that:
+
+- 3a.	Grazing will increase short term synchronous fluctuations in non-dominant species as it opens up space for these species to grow (Porensky et al. 2013). 
+
+- 3b.	Compensatory dynamics stabilize biomass production in plots with greater grazing intensity that have high temporal variability in species composition over the short term but high resistance to compositional change long term (Riginos et al. 2018).
+
+
+
+**Hypothesis 4: Selection for Stable Dominance**
+
+As the relative cover of a few grass species increased dramatically when released from grazing pressure, we hypothesize that: 
+
+- 4a.	This species becomes dominant when the system is released from grazing pressure and maintain the stability of total cover
+
+- 4b.	Alternatively, species that become dominant after release from grazing pressure will not be stable over time and would reduce the stability of the system.
+
+
+# Methods {-}
+
+***Dataset Identification:***
+
+I am using data from the Kenya Long Term Exclosure Experiment (KLEE) located on the Mpala Ranch and Conservancy property in Laikipia, Kenya. Mpala is managed for both livestock production as well as wildlife conservation. The experiment consists of six replicated herbivore exclosure treatments in a semi-arid Kenyan savanna. There are three blocks (North, Central, and South), each with six 200x200m plots for a total of 18 plots with 3 replicates of each treatment. Treatments and abbreviations are as follows: O = all herbivores excluded, W = wild meso-herbivores present (i.e. zebra, gazelles), C = cattle present, WC = cattle and wild meso-herbivores present, MW = megaherbivores (giraffes, elephants) and wild meso-herbivores present, MWC = all herbivores present. I used aerial herbaceous vegetation cover data collected bi-annually from 1999-2015 that gives the species name and the number of ‘first’ pin hits, which measures the first time a species occurred at a sampling location. This is a good measure of aerial percent cover and scales with total biomass (Veblen et al. 2016). 
+
+***Calculating Stability & Stabilizing Mechanisms***
+
+All data exploration and analysis were carried out in R version 4.0.3. After calculating the total cover as the sum of all individual species cover in a plot, we arranged treatments in order of grazing pressure by using the total cover as an approximation for the biomass removed by herbivores (Veblen et al. 2016). We calculated stability as the temporal mean of total cover divided by the standard deviation using the community_stability() function in the codyn package (Hallett et al. 2016). We calculated the compensatory and synchronous dynamics in these communities using a variety of variance ratio and synchrony metrics. Compensatory dynamics were calculated using the time specific variance ratio (Zhao et al. 2020, Shoemaker & Hallett, in press). I used two different synchrony metrics, Loreau synchrony, which compares the variance of aggregated species abundances with the summed variances of individual species and Gross synchrony, compares the average correlation of individual species with the rest of the aggregated community (Hallett et al. 2016). Loreau synchrony is bound between 0 (perfect asynchrony) and 1 (perfect synchrony) while Gross’s synchrony is bound between -1 (perfect asynchrony) and 1 (perfect synchrony).
+
+I calculated the Berger-Parker dominance in each community, which is a measure of the proportional biomass of the most abundant species. We looked at this over time and compared the mean dominance in each plot to stability. To verify that the portfolio effect can be used in this system, we used Taylor’s law as in Hallett et al. 2014. We found that this could not be used here. We also calculated the total richness over time and the average richness in each plot. All calculated stability mechanism metrics were compared with the calculated stability metrics. For a more detailed description of steps, please see the workflow plan below. 
+
+## Workflow
+
+### Data QAQC	
+1.	Working with ‘first hits’ data that is mostly processed. Species names are corrected and grouped together appropriately
+2.	Rename columns as R reads the numbers in and adds an X in front of them. Change to just the numbers 
+3.	Change the data to the long format so that there is only one column with year information and one column with pin hits
+4.	Filter out pin hit values that are NA or 0
+5.	Create a unique ID for each plot as there is no unique identifying plot ID. Do this by pasting the block and treatment together
+6.	Create a recognizable date format using lubridate. There is only year & month information – add 01 for the day for every observation
+7.	Take out bare ground observations
+8.	This data frame can now be used in stability, variance ratio, and evenness calculations or for calculating total pin hits (cover)
+9.	Make a separate data frame with only treatment information by selecting each unique block, treatment, and unique ID
+
+### Question 1: Does stability of total cover vary along a gradient of grazing intensity?
+
+1)	Sum total cover abundance in each plot 
+    a.	Group by block, treatment, and date before taking the sum of pin hits
+    b.	Group by treatment and date and take the mean of the pin hits to get this data ready to visualize
+    c.	Group by treatment and calculate the mean total cover in each treatment and the standard error
+
+2)	Figure 1: plot the mean total cover in each treatment as points with standard error
+
+3)	Figure 2: Graph the time series of mean total cover over time with separate lines for each grazing treatment 
+
+4)	Calculate community stability as: (temporal mean of total cover)/(temporal standard deviation of total cover) for each plot
+    a.	Use the community_stability() function from the package “codyn” 
+    b.	Join this with the treatment data frame by unique ID
+
+5)	Calculate the CV in each plot (temporal standard deviation/temporal mean)
+    a.	Take the inverse of community stability metric
+
+6)	Group by treatment and calculate the mean stability and the standard error
+    a.	Figure 3: Graph the mean community stability as a point for each treatment with bars for standard error 
+
+
+### Question 2: Do stability mechanisms change with varying intensity of grazing?
+**Compensatory Dynamics**
+
+1) Calculate: 
+    a. Variance Ratio: variance of community as a whole compared to the sum of individual population variances 
+        i. Use codyn package variance_ratio() function
+    b. Synchrony (Loreau): compares variance of aggregated species abundances with summed variances of individual species
+        i. Use codyn package loreau_synchrony() metric to calculate this
+    c. Synchrony (Gross): compare average correlation of each individual species with the rest of the aggregated community
+        i.Use codyn package gross_synchrony metric to calculate this
+    d. Timescale specific VR to detect short term synchronous dynamics (Shoemaker & Hallett in review; Zhao et al. 2020)
+        i.Create a blank data frame with columns for the classic, long, and short variance ratios
+        ii.Use the tsvr package tsvreq_classic() function in a for loop to calculate the three variance ratios
+        
+2) Group by treatment and calculate the mean and standard error of all metrics to use for comparison with grazing pressure and stability
+
+3) Join both synchrony metrics into one data frame
+
+4) Figure 4: graph the mean Loreau and Gross synchrony metrics as points with standard error bars by treatment
+
+5) Figure 5: graph mean stability on the y-axis and mean synchrony on the x-axis. Include standard error bars in x and y directions. Color points by grazing treatment.
+
+6) Figure 6: graph the mean time specific variance ratio for each grazing treatment. Color by variance ratio type (classic, long, and short). Add standard error bars and a line at 1 for easier comparison of compensatory vs. synchronous dynamics.
+
+    
+**Dominance**
+
+1) Group by treatment, unique ID, and date
+
+2) Rank each species abundance in order from least to most pin hits
+
+3) Sum total pin hits in each plot/year combo
+
+4) Filter for the max value of rank – the most abundant species
+
+5) Calculate the Berger Parker dominance as proportion of most abundant species divided by total community abundance. 
+
+6) Group by treatment and date
+
+7) Calculate the mean BP dominance and standard error
+
+8) Calculate the temporal mean dominance by grouping by treatment and then calculating mean and standard error of the mean dominance
+
+9) Join the mean stability and mean dominance data frames to make visualizations easy
+
+10) Figure 8: Graph the Berger-Parker dominance over time. Use the mean for each treatment over time and create a line graph with each line colored differently by grazing treatment
+
+11) Figure 9: Graph the temporal mean Berger-Parker dominance on the x-axis by the mean stability index on the y-axis with bars for standard error. Color points by grazing treatment.
+
+
+**Diversity**
+
+1)  Verify portfolio effect at this site using Taylor’s law $$ \sigma^{2} = c \mu^{z} $$
+    a. Calculate temporal mean and variance for each species
+    b. Take the log of each of these
+    c. Plot log species variance vs. log mean abundance (should be a linear relationship)
+    d. Fit a line to this log-log relationship and check the slope (the z value). This should be between 1-2 to have a stabilizing portfolio effect.
+    
+    
+2) No further exploration as the portfolio effect is not stabilizing at this site.
+
+## R Code
+
+
+### Data QAQC
+```{r, echo=TRUE}
+## Load Packages, Read in Data ##
+
+## set working directory
+setwd("~/Repositories/klee-stability")
+
+## Load packages
+library(tidyverse)
+library(lubridate)
+library(codyn)
+library(tsvr)
+library(RColorBrewer)
+library(forcats)
+library(knitr)
+library(bookdown)
+
+## get google drive function
+source("google-drive-function.R")
+
+## create a function to calculate standard error
+calcSE<-function(x){
+  x2<-na.omit(x)
+  sd(x2)/sqrt(length(x2))
+}
+
+## read in data, first hits (1999-2015), using lumped species data. Groupings determined by Kari, Lauren, & Corrina 
+#https://drive.google.com/file/d/10xNVrnnDDWbNBJM8nWLEm7keCMcJoXAG/view?usp=sharing
+kleedat <- read_csv_gdrive("10xNVrnnDDWbNBJM8nWLEm7keCMcJoXAG") %>%
+  tbl_df()
+```
+
+
+```{r, echo=TRUE}
+## Data QAQC ##
+
+## change year column names to numbers
+names(kleedat) <- c("BLOCK", "TREATMENT", "SPECIES", "1999_01", "2000_02", "2000_06", "2001_01", "2001_05",  
+                    "2002_02", "2002_06",  "2003_02",  "2004_02",  "2004_06",  "2005_02",  "2005_06",  "2006_03",
+                    "2006_06",  "2007_02", "2007_06", "2008_02", "2008_06", "2009_02", "2009_06", "2010_01",  
+                    "2010_06", "2011_06", "2012_06", "2013_06", "2014_06", "2015_06")
+
+
+## pivot to long format so that there is a column for date (year-month combo) and for abundance 
+kleedat_long <- pivot_longer(kleedat, cols = "1999_01":"2015_06", names_to = "Date", values_to = "Pin_Hits")
+
+dont_want <- c("bare") #make a vector of species that are not wanted (so far only bare ground)
+
+## create Unique ID for each block-plot combo and format date columns so they can fit in the lubridate package
+klee_long <- kleedat_long %>%
+  filter(Pin_Hits > 0, !is.na(Pin_Hits)) %>% #most observations are 0
+  filter(!SPECIES %in% dont_want) %>% #filter out bare ground
+  mutate(Unique_ID = paste(BLOCK, TREATMENT, sep = "_")) %>% #create unique ID for each plot
+  mutate(day = "01") %>% #create a filler column with day value so that dates can be parsed
+  mutate(Date_junk = paste(Date, day, sep = "_")) %>% #paste filler day column with year-month column
+  mutate(Date_final = ymd(Date_junk)) %>% #change dates into recognized format
+  mutate(Date_numeric = paste(year(Date_final), month(Date_final), day(Date_final), sep = "0")) %>% #create column that can be coerced into numeric form
+  select(BLOCK:SPECIES, Pin_Hits:Unique_ID, Date_final:Date_numeric) #select columns, drop Date and Date_junk
+
+## change Date_numeric to integer
+klee_long$Date_numeric <- as.integer(klee_long$Date_numeric)
+
+## make a separate data frame with only treatment data. key = Unique_ID
+treats <- klee_long %>%
+  select(BLOCK, TREATMENT, Unique_ID) %>%
+  unique()
+
+## remove unneeded objects to keep environment clean
+rm(kleedat)
+rm(kleedat_long)
+rm(dont_want)
+
+```
+
+
+
+### Question 1: R Code
+#### Explore Calculated Total Cover Data (1999-2015)
+```{r,  echo=TRUE}
+## Calculate Total Cover 1999-2015 ##
+
+## group data by block, treatment, and date before summing species abundances to get total cover
+klee_totcov <- klee_long %>%
+  group_by(BLOCK, TREATMENT, Date_final) %>% #group by block, treatment, and date 
+  summarise(totcov = sum(Pin_Hits, na.rm=T)) #sum abundances to calculate tot cover
+
+## Calculate the mean total cover for each treatment & time point
+meantotcov <- klee_totcov %>%
+  group_by(TREATMENT, Date_final) %>% #group by treatment & date
+  summarize(Mean_TotCov = mean(totcov)) #calculate the mean total cover at each treatment & date
+
+## Visualize as line graph
+ggplot(meantotcov, aes(x=Date_final)) +
+  geom_line(aes(y=Mean_TotCov, col=TREATMENT)) + #separate by treatment to more easily view overlapping lines
+  theme_bw() +
+  ylab("Mean Total Cover") + xlab("Date") +
+  facet_wrap(~TREATMENT)
+
+## Visualize as scatterplot
+ggplot(meantotcov, aes(x=Date_final, y=Mean_TotCov, col=TREATMENT)) + 
+  geom_point() +
+  facet_wrap(~TREATMENT) +
+  ylab("Mean Total Cover") + xlab("Date") +
+  theme_bw()
+
+## Calculate mean total cover for each treatment across time
+avg_biomass <- meantotcov %>%
+  group_by(TREATMENT) %>% #group by treatment
+  summarize(avgbio = mean(Mean_TotCov), SEbio = calcSE(Mean_TotCov)) #calculate mean and standard error of total cover
+
+#reorder treatments to match grazing pressure.
+avg_biomass$TREATMENT <- as.factor(avg_biomass$TREATMENT) #change treatment to factor
+avg_biomass$TREATMENT <- factor(avg_biomass$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+```
+
+
+
+#### Calculate Stability Metrics
+``` {r,  echo=TRUE}
+## Community Stability ##
+
+## calculate community stability metric for each plot
+commstab <- community_stability(klee_long, 
+                                time.var = "Date_numeric", 
+                                abundance.var = "Pin_Hits", 
+                                replicate.var = "Unique_ID")
+
+## join with treatment info & calculate CV
+stability <- left_join(commstab, treats, by = "Unique_ID") %>% #join community stability with treatment info
+  mutate(CV = 1/stability) #calculate the CV by taking the inverse of stability
+
+## graph stability with treatment info (boxplot)
+ggplot(stability, aes(x=TREATMENT, y=stability)) +
+  geom_boxplot() +
+  ylab("Stability of Total Cover") + xlab("Herbivore Treatment") +
+  theme_bw()
+
+## graph CV with treatment info (boxplot)
+ggplot(stability, aes(x=TREATMENT, y=CV)) +
+  geom_boxplot() +
+  ylab("CV") + xlab("Herbivore Treatment") +
+  theme_bw()
+
+## create a dataframe with mean & standard error of stability & CV by treatment
+mean_stability <- stability %>%
+  group_by(TREATMENT) %>%
+  summarize(mean_st = mean(stability), SEst = calcSE(stability), mean_cv = mean(CV), SECV = calcSE(CV))
+
+## reorder treatments to match grazing pressure.
+mean_stability$TREATMENT <- as.factor(mean_stability$TREATMENT) #change treatment to factor
+mean_stability$TREATMENT <- factor(mean_stability$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+```
+
+
+
+
+### Question 2: R Code
+#### Calculate Synchrony Metrics
+```{r,  echo=TRUE}
+## Calculate Synchrony Metrics ##
+
+## Calculate Loreau synchrony metric
+loreau_synchrony <- synchrony(
+  klee_long,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  metric = "Loreau",
+  replicate.var = "Unique_ID"
+)
+colnames(loreau_synchrony) <- c("Unique_ID", "loreau_synchrony") #rename columns
+
+## Calculate Gross synchrony metric
+gross_synchrony <- synchrony(
+  klee_long,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  replicate.var = "Unique_ID",
+  metric="Gross")
+colnames(gross_synchrony) <- c("Unique_ID", "gross_synchrony") #rename columns
+
+## join two synchrony metrics into one data frame
+synchrony <- left_join(loreau_synchrony, gross_synchrony, by = "Unique_ID") 
+
+## calculate mean & SE of metrics to get ready for graphing
+mean_synchrony <- left_join(synchrony, treats, by = "Unique_ID") %>%
+  pivot_longer(cols = loreau_synchrony:gross_synchrony, names_to = "Metric_Name", values_to = "Synchrony") %>% #pivot to long format
+  group_by(TREATMENT, Metric_Name) %>%
+  summarise(mean_value = mean(Synchrony), SE_value = calcSE(Synchrony))
+
+## reorder treatments to match grazing pressure.
+mean_synchrony$TREATMENT <- as.factor(mean_synchrony$TREATMENT) #change treatment to factor
+mean_synchrony$TREATMENT <- factor(mean_synchrony$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+## join synchrony & stability data frames to get ready for graphing
+syn_stab <- inner_join(mean_synchrony, mean_stability, by = "TREATMENT")
+
+## visualize synchrony metrics together
+ggplot(mean_synchrony, aes(x=TREATMENT, y=mean_value, col = Metric_Name)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean_value-SE_value, ymax = mean_value+SE_value), width= 0.075) +
+  ylab("Synchrony") + xlab("Treatment") +
+  theme_bw()
+
+## Visualize synchrony & stability metrics
+ggplot(syn_stab, aes(x=mean_value , y=mean_st, col = TREATMENT, shape = Metric_Name)) +
+  geom_point() +
+  ylab("Stability") + xlab("Synchrony") 
+
+```
+
+
+
+#### Calculate Time Specific Variance Ratio
+```{r,  echo=TRUE}
+
+## Calculate Timescale Specific VR ##
+
+#set up data frame to put tsvr into
+outnames <- c("Unique_ID", "TREATMENT", "classicVR", "longVR", "shortVR") #column names
+siteout <- as.data.frame(matrix(nrow=0, ncol = 5)) #make empty dataframe
+names(siteout) <- outnames #set names for empty dataframe
+plots <- unique(klee_long$Unique_ID) #make vector of unique plots
+
+## Use for loop to calculate TSVR for each plot
+for (i in 1:length(plots)) {
+  
+  #subset by replicate (gives all observations from one plot over time)
+  plot <- subset(klee_long, Unique_ID == plots[i]) %>%
+    tbl_df()
+  
+  #select species and fill 0's 
+  plot2 <- plot %>%
+    select(Date_numeric, SPECIES, Pin_Hits) %>% #selecting only these three columns
+    spread(SPECIES, Pin_Hits, fill = 0) #changing to wide format
+  
+  #transpose the data 
+  dat <- t(as.matrix(plot2[,2:dim(plot2)[2]]))
+  
+  #create a dataframe with replicate info to attach VR metrics to
+  VR_plots <- plot %>%
+    select(Unique_ID, TREATMENT, BLOCK) %>%
+    unique()
+  
+  #calculate classic VR
+  res0 <- vreq_classic(dat)
+  VR_plots$classicVR <- res0[[3]]
+  
+  #calculate tsvr 
+  res <- tsvreq_classic(dat)
+  
+  #aggregate short vs. long variance ratios
+  resLong <- aggts(res, res$ts[res$ts>=4]) #grabbing tsvr with time period >= 4 years
+  resShort <- aggts(res, res$ts[res$ts<4]) #grabbing tsvr with time period <4 years
+  
+  #attach short & long variance ratios
+  VR_plots$longVR <- resLong[[3]]
+  VR_plots$shortVR <- resShort[[3]]
+  
+  #append to external dataframe
+  siteout<-rbind(siteout, VR_plots)
+}
+
+#rename data frame
+tsVR <- siteout
+
+
+## Calculate the mean and standard error of VR metrics
+meantsVR <- tsVR %>%
+  pivot_longer(cols = classicVR:shortVR, names_to = "VR_type", values_to = "VR_value" ) %>% #change to long format
+  group_by(TREATMENT, VR_type) %>%
+  summarise(meanVR = mean(VR_value), SEVR = calcSE(VR_value))
+
+#reorder treatments to match grazing pressure.
+meantsVR$TREATMENT <- as.factor(meantsVR$TREATMENT) #change treatment to factor
+meantsVR$TREATMENT <- factor(meantsVR$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+
+## Visualize time specific variance ratio
+#VR by VR type, faceted by treatment
+ggplot(meantsVR, aes(x=VR_type, y=meanVR, col = TREATMENT)) +
+  geom_hline(yintercept = 1, color = "grey", lty = "dashed") +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = meanVR-SEVR, ymax = meanVR+SEVR), width = 0.3) +
+  facet_wrap(~TREATMENT) +
+  ylab("Variance Ratio") + xlab("")
+
+
+## Compare VR & Stability ##
+
+## join mean stability & mean tsVR data frames. 
+tsvr_stab <- inner_join(mean_stability, meantsVR, by = "TREATMENT") 
+
+#plot stability vs. VR to see if they are correlated.
+ggplot(tsvr_stab, aes(x=meanVR, y=mean_st)) +
+  geom_point() +
+  facet_wrap(~VR_type) +
+  ylab("Stability") + xlab("Variance Ratio") +
+  theme_bw()
+
+## Create a data frame with all synchrony and variance ratio metrics in order to make a table.
+## change mean synchrony to wide format
+meansyn <- mean_synchrony %>%
+  pivot_wider(names_from = "Metric_Name", values_from = "mean_value") %>% #make unique columns for each synchrony metric
+  group_by(TREATMENT) %>%
+  summarise(GS=mean(gross_synchrony, na.rm = T), LS=mean(loreau_synchrony, na.rm = T)) #calculate the mean for each treatment and remove NAs to get rid of the weird column format that pivot wider creates here
+
+## change mean tsvr to wide format
+tsvrmean <- tsvr_stab %>%
+  pivot_wider(names_from = "VR_type", values_from = "meanVR") %>% #make unique column for each variance ratio metric
+  group_by(TREATMENT) %>%
+  summarise(classic=mean(classicVR, na.rm = TRUE), short = mean(shortVR, na.rm=TRUE), long=mean(longVR, na.rm = TRUE)) #calculate the mean for each treatment and remove NAs to get rid of the weird column format that pivot wider creates here
+
+## join synchrony and variance ratio data frames
+comp_dyn <- left_join(meansyn, tsvrmean, by = "TREATMENT") 
+```
+
+
+
+#### Calculate Dominance
+```{r,  echo=TRUE}
+## Calculate Berger-Parker Dominance ##
+#BP dominance: d = Nmax/N (relative abundance of most dominant species)
+BP_dom <- klee_long %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>% #group by treatment, plot, and date
+  mutate(rank = rank(Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
+  mutate(tot_abund = sum(Pin_Hits)) %>% #calculate total abundance
+  filter(rank == max(rank)) %>% #only include most abundant species in each plot
+  summarise(BP_dominance = Pin_Hits/tot_abund) %>% #calculate Berger-Parker dominance index
+  group_by(TREATMENT, Date_final) %>% #group by treatment and date
+  summarise(mean_dom = mean(BP_dominance), SEdom = calcSE(BP_dominance)) #calculate mean and SE for each treatment at each date
+
+#reorder treatments to match grazing pressure.
+BP_dom$TREATMENT <- as.factor(BP_dom$TREATMENT) #change treatment to factor
+BP_dom$TREATMENT <- factor(BP_dom$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+## calculate the mean dominance index by treatment
+avg_BPdom <- BP_dom %>%
+  group_by(TREATMENT) %>% #group by treatment
+  summarise(avg_dom = mean(mean_dom), SE = calcSE(mean_dom)) #take mean across time for each treatment
+
+#reorder treatments to match grazing pressure.
+avg_BPdom$TREATMENT <- as.factor(avg_BPdom$TREATMENT) #change treatment to factor
+avg_BPdom$TREATMENT <- factor(avg_BPdom$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+## join stability & dominance data frames
+dom_stab <- inner_join(mean_stability, avg_BPdom, by = "TREATMENT")
+
+## visualize mean dominance by grazing treatment
+ggplot(avg_BPdom, aes(x=TREATMENT, y=avg_dom)) +
+  geom_point() +
+  ylab("Berger-Parker Dominance") + xlab("Treatment") +
+  geom_errorbar(aes(ymin=avg_dom-SE, ymax=avg_dom+SE), width=0.2)
+
+```
+
+
+
+#### Verifying the Portfolio Effect
+```{r,  echo=TRUE}
+## Verify Portfolio Effect ##
+
+## group by unique ID and species to calculate the mean and variance of each species
+portfolio_effect <- klee_long %>%
+  filter(!is.na(SPECIES), !is.na(Pin_Hits)) %>% #filter out any NA values
+  filter(Pin_Hits > 0) %>% #filter out abundances of 0
+  group_by(Unique_ID, SPECIES) %>% #group by unique_ID & species
+  summarise(variance = var(Pin_Hits, na.rm = TRUE), meanhits = mean(Pin_Hits)) %>% #calculate mean & variance
+  mutate(logvar = log(variance), logmean = log(meanhits)) #log transform mean and variance
+
+## remove log values less than 0
+#linear model doesn't seem to work with NA and 0 values
+portfolio <- portfolio_effect %>%
+  filter(logvar > 0, logmean > 0)
+
+#run a linear model to calculate the slope
+taylor <- lm(logmean~logvar, data = portfolio)
+summary(taylor)
+#check that slope is between 1-2
+## slope is 0.486023
+
+## plot log variance and log mean
+ggplot(portfolio, aes(x=logvar, y=logmean)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+```
+
+
+
+#### Make graphics adjustments
+```{r, echo=TRUE}
+green_scale <- c("#97e196", "#6cc08b", "#4c9b82", "#217a79", "#105965", "#074050") #make a vector of colors
+theme_set(theme_bw()) #set the theme
+```
+
+
+
+# Results {-}
+  We ordered treatments in order of total cover, which scales linearly with standing biomass and the amount of biomass removed by herbivores (Veblen et al. 2016). Thus, our gradient of grazing intensity was 0, W, MW, C, MWC, WC (Figure 1). Total cover varies over time and treatments appear synchronous in their fluctuations at many points (Figure 2). The stability of biomass production declined with grazing intensity, so that the most stable treatment was complete herbivore removal, and the least stable treatments were MWC and WC (Figure 3). 
+
+
+  All treatments with herbivores had weak synchronous dynamics that generally increased along the gradient of grazing intensity (Table 1, Figure 4). Both the Loreau and Gross synchrony metrics followed the same pattern, except for the cattle treatment which had lower synchrony than W and MW treatments as measured by the Gross synchrony metric. The most synchronous treatments were MWC (GS = 0.0961179, LS = 0.2087248) and WC (GS = 0.1106211, LS = 0.2058985) (Figure 4) and complete herbivore removal had the lowest synchrony values, GS = 0.0412301 and LS = 0.1011377 (Table 1). The only treatment with a variance ratio below 1 (compensatory dynamics) was 0, or complete herbivore removal (Table 1). The classic and long variance ratios also increased along the gradient of grazing pressure (Table 1). The short- and long-term variance ratios were only different for the 0 and MW treatments as 0 had a larger short term variance ratio and MW had a smaller short term variance ratio (Figure 6, Table 1). Overall, synchrony was negatively correlated with stability (Figure 5).
+  
+  
+  Dominance increased over time in plots with low or no grazing (0, W, and MW). Although all treatments started with relatively similar dominance indices, they diverged over time, particularly between 2005 and 2010. After treatments diverged treatments with the lowest grazing intensity (0, W, and MW) had high dominance while all plots with cattle had lower dominance (Figure 8). Dominance was positively correlated with stability (Figure 9). 
+  
+  
+  In order to use portfolio effect, the variances in species abundances should increase more steeply than their mean abundances (Doak et al. 1998). The portfolio effect cannot be used in this system as the slope of species’ log means and log abundances was 0.486023 and in order to use the portfolio effect it should be between 1-2.
+  
+***
+
+```{r, echo=TRUE, fig.align='center', fig.cap='**Figure 1:** Points represent the mean total cover for each treatment, averaged across the time series. Bars are one standard error. Treatment abbreviations are as follows: 0 = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
+
+#graph the mean total pin hits by treatment
+ggplot(avg_biomass, aes(x=TREATMENT, y=avgbio)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin=avgbio-SEbio, ymax=avgbio+SEbio), width = 0.2) + #include standard error bars
+  ylab("Total Pin Hits") + xlab("Treatment") + #label axes
+  theme(text = element_text(size = 14)) #change font size
+
+```
+
+
+***
+
+
+```{r, echo=TRUE, fig.align='center', fig.cap='**Figure 2:** Points represent the mean stability of total cover (temporal mean/temporal standard deviation) for each grazing treatment at each point in time. Treatment abbreviations are as follows: 0 = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
+
+#graph the time series of total cover 
+ggplot(meantotcov, aes(x=Date_final, y=Mean_TotCov, col=TREATMENT)) + #separate treatments by color
+  geom_line(size = 0.5) +
+  geom_point(aes(y=Mean_TotCov)) +
+  scale_color_manual(values = green_scale) + #change color scheme
+  ylab("Total Cover (# Pin Hits)") + xlab("Date") + labs(col = "Treatment") + #add labels
+  theme(legend.title = element_text(size=12)) + theme(text = element_text(size = 14)) #change font sizes
+
+```
+
+***
+
+```{r, echo=TRUE, fig.align='center', fig.cap='**Figure 3:** Points show the mean stability value for each grazing treatment. Bars are one standard error. Treatment abbreviations are as follows: 0 = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
+## visualize mean stability & standard error
+ggplot(mean_stability, aes(x=TREATMENT, y=mean_st)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_st-SEst, ymax=mean_st+SEst), width = 0.2) + #add standard error bars
+  ylab("Stability (mean/sd)") + xlab("Treatment") + #label axes
+  theme(text = element_text(size = 14)) #change font size
+```
+
+
+***
+
+
+```{r, results='asis', echo=TRUE}
+
+#create a table of all synchrony and variance ratio metrics
+kable(comp_dyn, col.names = c("Treatment", "Gross Synchrony", "Loreau Synchrony", "Classic Variance Ratio", "Short Variance Ratio", "Long Variance Ratio"), caption = 'Table 1: Synchrony')
+
+```
+
+
+***
+
+```{r, echo=TRUE, fig.align='center', fig.cap= '**Figure 4:** Points show the synchrony value for each treatment. Circles represent the Loreau synchrony metric and triangles represent the Gross synchrony metric. Points are colored according to grazing treatment, with lighter values indicating less grazing pressure. Treatment abbreviations are as follows: 0 = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
+
+### SYNCHRONY & Grazing Tx FINAL FIGURE 
+ggplot(syn_stab, aes(x=TREATMENT , y=mean_value, col=TREATMENT, shape = Metric_Name)) +
+  geom_point(size=3) +
+  scale_color_manual(values = green_scale) +
+  geom_errorbar(aes(ymin = mean_value-SE_value, ymax=mean_value+SE_value), width = 0.3) +
+  ylab("Synchrony") + xlab("Treatment") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Treatment", shape = "Synchrony Metric") + #add legend titles
+  scale_shape_discrete(labels = c("Gross", "Loreau")) #rename synchrony metrics in legend
+
+```
+
+***
+
+```{r, echo=TRUE, fig.align='center', fig.cap='**Figure 5:** Points show the mean stability and synchrony values for each grazing treatment. Circles represent the Loreau synchrony metric and triangles represent the Gross synchrony metric. Points are colored according to grazing treatment, with lighter values indicating less grazing pressure. Treatment abbreviations are as follows: 0 = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
+
+### SYNCHRONY & STABILITY FINAL FIGURE 
+ggplot(syn_stab, aes(x=mean_value , y=mean_st, col = TREATMENT, shape=Metric_Name)) +
+  geom_point(size=3) +
+  scale_color_manual(values = green_scale) +
+  geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst), width = 0.005) + #add standard error bars
+  geom_errorbarh(aes(xmin = mean_value-SE_value, xmax=mean_value+SE_value), height = 0.1) + #add standard error bars
+  ylab("Stability") + xlab("Synchrony") +  #label axes
+  theme(legend.title = element_text(size=12)) + theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Treatment", shape = "Synchrony Metric") +
+  scale_shape_discrete(labels = c("Gross", "Loreau"))
+```
+
+
+***
+
+```{r, echo=TRUE, fig.align='center', fig.cap='**Figure 6:** Points show the variance ratio for each grazing treatment. Color represents the variance ratio type: green is the classic variance ratio, orange is the long variance ratio (timescales > 4 years) and purple is the short variance ratio (timescales < 4 years). Bars show one standard error. Treatment abbreviations are as follows: 0 = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
+
+### TSVR & GRAZING TREATMENT FINAL FIGURE 
+#variance ratio vs. treatment, grouped by VR type
+ggplot(meantsVR, aes(x=TREATMENT, y=meanVR, col = VR_type)) +
+  geom_hline(yintercept = 1, color = "grey", lty = "dashed") +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = meanVR-SEVR, ymax = meanVR+SEVR), width = 0.1) +
+  theme_bw() +
+  scale_color_brewer(palette = "Dark2", labels = c("Classic", "Long", "Short")) +
+  ylab("Variance Ratio") + xlab("Treatment") +
+  theme(legend.title = element_text(size=12)) +
+  theme(text = element_text(size = 14)) +
+  labs(col = "Variance Ratio Type") #change legend title
+```
+
+***
+
+```{r, echo=TRUE, fig.align='center', fig.cap='**Figure 7:** Lines show the mean Berger-Parker dominance across time for each grazing treatment. Treatment abbreviations are as follows: 0 = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
+
+## Graph dominance over time
+ggplot(BP_dom, aes(x=Date_final, y=mean_dom, col=TREATMENT)) +
+  geom_line(size = 0.5) +
+  theme_bw() +
+  scale_color_brewer(palette = "Dark2") +
+  ylab("Berger-Parker Dominance") + xlab("Date") +
+  scale_color_manual(values = green_scale) +
+  theme(legend.title = element_text(size=12)) +
+  theme(text = element_text(size = 14)) +
+  labs(col = "Treatment") #change legend title
+
+```
+
+
+***
+
+```{r, echo=TRUE, fig.align='center', fig.cap='**Figure 8:** Points represent the mean stability and mean Berger-Parker dominance for each grazing treatment. Points are colored according to grazing treatment. Bars show one standard error. Treatment abbreviations are as follows: 0 = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
+## Graph dominance and stability
+ggplot(dom_stab, aes(x=avg_dom, y=mean_st, col=TREATMENT)) +
+  geom_point(size = 3) +
+  theme_bw() +
+  scale_color_brewer(palette = "Dark2") +
+  ylab("Stability") + xlab("Berger-Parker Dominance") +
+  geom_errorbarh(aes(xmin=avg_dom-SE, xmax=avg_dom+SE)) +
+  geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst)) +
+  scale_color_manual(values = green_scale) +
+  theme(legend.title = element_text(size=12)) +
+  theme(text = element_text(size = 14)) +
+  labs(col = "Treatment") #change legend title
+
+```
+
+
+```{r, echo=TRUE}
+kable(avg_BPdom, col.names = c("Treatment", "Mean Berger-Parker Dominance", "Standard Error"), caption = 'Table 2: Dominance')
+
+```
+
+***
+
+
+# Discussion
+
+To investigate the role of top-down control in maintaining stability in an herbaceous plant community, I used data from the Kenya Long Term Exclosure Experiment. Overall, the stability of biomass production declined with increased grazing pressure, contrary to expectations. Additionally, stability mechanisms in this system appear to be context dependent on grazing intensity. At low grazing pressure, there is higher stability, high dominance, and low synchrony while at high grazing pressure there is low stability, greater synchrony and low dominance.
+
+
+
+Grazing reduced the stability of biomass production (Figure 3), which is opposite to the hypothesized relationship. This could be a result of the higher mean standing biomass present in treatments with lower grazing intensity (Figure 1), rather than less variation over time. Comparing the variances of each treatment may be a more effective measure of stability here. Notably, the stability of biomass production follows a different pattern than the stability of community composition in this system as composition showed greater stability in high grazing treatments (Riginos et al. 2018).  
+
+
+
+Synchrony generally increased with grazing pressure according to both synchrony metrics (Figure 4). Loreau’s synchrony is bound between 0 (perfect asynchrony) and 1 (perfect synchrony) while Gross’s synchrony is bound between -1 (perfect asynchrony) and 1 (perfect synchrony). Therefore, all treatments show weak synchronous dynamics as they are between 0.1-0.21 for Loreau’s synchrony and 0.04-0.11 for Gross’s synchrony. The only treatment with compensatory dynamics was the complete herbivore removal. All other treatments had long term and classic variance ratios greater than 1. The short term (4 year) variance ratio was different from the long-term variance ratio in the 0 and MW treatments (Figure 6, Table 1). Synchrony was destabilizing as predicted. 
+
+
+Though the link between synchrony and herbivory is not clearly established, this was opposite to expectations set up from the community composition data. The drivers behind this increase in synchrony may be influenced by the seasonal patterns of grazing or rotational grazing patterns of cattle (Veblen et al. 2008). Additionally, bare soil patches created by herbivores may open up space for plant species to colonize (Augustine et al. 2019), which could create synchronous dynamics. These remain speculative and investigating the drivers of synchrony remains an important next step.
+
+
+Treatments at low grazing pressure had high dominance, which appears to be stabilizing in this system (Table 2, Figure 9). This supports my hypothesis that a dominant species will be released from grazing pressure and is consistent with previous work at this site that found large increases in the relative cover of a few species including *Brachiaria lachnantha* and *Pseudognaphalium spp.* when grazing was reduced (Veblen et al. 2016). The greater stability of the community at high dominance levels indicates that there may be a stable dominant species, or compensatory dynamics between a few dominant species. This is an important future direction to examine the population stability and dynamics of the most dominant species in each treatment.
+
+
+There are several important limitations to this work. First, using total aerial cover as an approximation for biomass is not ideal as although aerial cover and biomass scale linearly (Veblen et al. 2016), total cover might not be sensitive to smaller, but still important, changes in biomass. Additionally, the grazing pressure metric could be improved by looking at the biomass removed in a season or the density of herbivores in an area rather than the total cover. An important future direction will be to explore other grazing pressure metrics. Given that we are comparing the stability between communities with different levels of grazing, our stability metric may not be the most appropriate for comparisons. This could be improved upon by looking at the variance between communities as in this case standardizing for the mean biomass may obscure differences in variation between grazing treatments. 
+
+
+Overall, there is to be top-down control on the stability of biomass production, although the stability of biomass production and community composition had opposite trends. Importantly, the mechanisms that maintain stability appear to be context dependent upon grazing intensity in this system. As the effects of herbivores on stability mechanisms are relatively unexplored, this work sets the stage for further investigation into the effects of herbivore pressure and guild on stability as well as causal links between herbivore impacts and stability mechanisms.
+
+# Literature Cited
+Augustine, D. J., Wigley, B. J., Ratnam, J., Kibet, S., Nyangito, M., & Sankaran, M. (2019). Large herbivores maintain a two-phase herbaceous vegetation mosaic in a semi-arid savanna. Ecology and Evolution, 9(22), 12779–12788. https://doi.org/10.1002/ece3.5750
+
+Doak, D. F., Bigger, D., Harding, E. K., Marvier, M. A., O’Malley, R. E., & Thomson, D. (1998). The statistical inevitability of stability-diversity relationships in community ecology. American Naturalist, 151(3), 264–276. https://doi.org/10.1086/286117
+
+Fu, H., Yuan, G., Özkan, K., Johansson, L. S., Søndergaard, M., Lauridsen, T. L., & Jeppesen, E. (2020). Patterns of Seasonal Stability of Lake Phytoplankton Mediated by Resource and Grazer Control During Two Decades of Re-oligotrophication. Ecosystems. https://doi.org/10.1007/s10021-020-00557-w
+
+Gonzalez, A., & Loreau, M. (2009). The causes and consequences of compensatory dynamics in ecological communities. Annual Review of Ecology, Evolution, and Systematics, 40, 393–414. https://doi.org/10.1146/annurev.ecolsys.39.110707.173349
+
+Grman, E., Lau, J. A., Schoolmaster, D. R., & Gross, K. L. (2010). Mechanisms contributing to stability in ecosystem function depend on the environmental context. Ecology Letters, 13(11), 1400–1410. https://doi.org/10.1111/j.1461-0248.2010.01533.x
+
+Hallett, L. M., Hsu, J. S., Cleland, E. E., Collins, S. L., Dickson, T. L., Farrer, E. C., Gherardi, L. A., Gross, K. L., Hobbs, R. J., Turnbull, L., & Suding, K. N. (2014). Biotic mechanisms of community stability shift along a precipitation gradient. Ecology, 95(6), 1693–1700. https://doi.org/10.1890/13-0895.1
+
+Hallett, L. M., Jones, S. K., MacDonald, A. A. M., Jones, M. B., Flynn, D. F. B., Ripplinger, J., Slaughter, P., Gries, C., & Collins, S. L. (2016). codyn: An r package of community dynamics metrics. Methods in Ecology and Evolution, 7(10), 1146–1151. https://doi.org/10.1111/2041-210X.12569
+
+Hautier, Y., Zhang, P., Loreau, M., Wilcox, K. R., Seabloom, E. W., Borer, E. T., Byrnes, J. E. K., Koerner, S. E., Komatsu, K. J., Lefcheck, J. S., Hector, A., Adler, P. B., Alberti, J., Arnillas, C. A., Bakker, J. D., Brudvig, L. A., Bugalho, M. N., Cadotte, M., Caldeira, M. C., … Wang, S. (2020). General destabilizing effects of eutrophication on grassland productivity at multiple spatial scales. Nature Communications, 11(1), 1–9. https://doi.org/10.1038/s41467-020-19252-4
+
+Hillebrand, H., Gruner, D. S., Borer, E. T., Bracken, M. E. S., Cleland, E. E., Elser, J. J., Harpole, W. S., Ngai, J. T., Seabloom, E. W., Shurin, J. B., & Smith, J. E. (2007). Consumer versus resource control of producer diversity depends on ecosystem type and producer community structure. Proceedings of the National Academy of Sciences of the United States of America, 104(26), 10904–10909. https://doi.org/10.1073/pnas.0701918104
+
+Hooper, D. U., Chapin, III, F. S., Ewel, J. J., Hector, A., Inchausti, P., Lavorel, S., Lawton, J. H., Lodge, D. M., Loreau, M., Naeem, S., Schmid, B., Setala, H., Symstad, A. J., Vandermeer, J., & Wardle, D. A. (2005). ESA Report. Ecological Monographs, 75(July 2004), 3–35. https://doi.org/10.1890/04-0922
+
+Koerner, S. E., Smith, M. D., Burkepile, D. E., Hanan, N. P., Avolio, M. L., Collins, S. L., Knapp, A. K., Lemoine, N. P., Forrestel, E. J., Eby, S., Thompson, D. I., Aguado-Santacruz, G. A., Anderson, J. P., Anderson, T. M., Angassa, A., Bagchi, S., Bakker, E. S., Bastin, G., Baur, L. E., … Zelikova, T. J. (2018). Change in dominance determines herbivore effects on plant biodiversity. Nature Ecology and Evolution, 2(12), 1925–1932. https://doi.org/10.1038/s41559-018-0696-y
+
+Porensky, L. M., Wittman, S. E., Riginos, C., & Young, T. P. (2013). Herbivory and drought interact to enhance spatial patterning and diversity in a savanna understory. Oecologia, 173(2), 591–602. https://doi.org/10.1007/s00442-013-2637-4
+
+Riginos, C., Porensky, L. M., Veblen, K. E., & Young, T. P. (2018). Herbivory and drought generate short-term stochasticity and long-term stability in a savanna understory community. Ecological Applications, 28(2), 323–335. https://doi.org/10.1002/eap.1649
+
+Ripple, W. J., Newsome, T. M., Wolf, C., Dirzo, R., Everatt, K. T., Galetti, M., Hayward, M. W., Kerley, G. I. H., Levi, T., Lindsey, P. A., Macdonald, D. W., Malhi, Y., Painter, L. E., Sandom, C. J., Terborgh, J., & Van Valkenburgh, B. (2015). Collapse of the world’s largest herbivores. Science Advances, 1(4). https://doi.org/10.1126/sciadv.1400103
+
+Schindler, D. E., Armstrong, J. B., & Reed, T. E. (2015). The portfolio concept in ecology and evolution. Frontiers in Ecology and the Environment, 13(5), 257–263. https://doi.org/10.1890/140275
+
+Shoemaker, L. G., Hallett, L., & Ave, C. (n.d.). The long and the short of it : Decomposing synchrony and compensation across temporal scales.
+
+Tilman, D. (1999). The ecological consequences of changes in biodiversity: A search for general principles. Ecology, 80(5), 1455–1474. https://doi.org/10.1890/0012-9658(1999)080[1455:tecoci]2.0.co;2
+
+Veblen, K. E. (2008). Season- and herbivore-dependent competition and facilitation in a semiarid savanna. Ecology, 89(6), 1532–1540. https://doi.org/10.1890/07-0973.1
+
+Veblen, K. E., Porensky, L. M., Riginos, C., & Young, T. P. (2016). Are cattle surrogate wildlife? Savanna plant community composition explained by total herbivory more than herbivore type. Ecological Applications, 26(6), 1610–1623. https://doi.org/10.1890/15-1367.1
+
+Yachi, S., & Loreau, M. (1999). Biodiversity and ecosystem productivity in a fluctuating environment: The insurance hypothesis. Proceedings of the National Academy of Sciences of the United States of America, 96(4), 1463–1468. https://doi.org/10.1073/pnas.96.4.1463
+
+Zhao, L., Wang, S., Hallett, L. M., Rypel, A. L., Sheppard, L. W., Castorani, M. C. N., Shoemaker, L. G., Cottingham, K. L., Suding, K., & Reuman, D. C. (2020). A new variance ratio metric to detect the timescale of compensatory dynamics. Ecosphere, 11(5). https://doi.org/10.1002/ecs2.3114
