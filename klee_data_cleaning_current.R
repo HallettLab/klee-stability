@@ -52,13 +52,8 @@ treats <- klee_long %>%
   select(BLOCK, TREATMENT, Unique_ID) %>%
   unique()
 
-## remove unneeded objects to keep environment clean
-rm(kleedat)
-rm(kleedat_long)
-rm(dont_want)
 
 ## Calculate Total Cover
-
 ## Calculate Total Cover 1999-2015 ##
 klee_totcov <- klee_long %>%
   group_by(BLOCK, TREATMENT, Unique_ID, Date_final) %>% #group by block, treatment, and date 
@@ -77,3 +72,14 @@ avg_biomass <- meantotcov %>%
 #reorder treatments to match grazing pressure.
 avg_biomass$TREATMENT <- as.factor(avg_biomass$TREATMENT) #change treatment to factor
 avg_biomass$TREATMENT <- factor(avg_biomass$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+
+
+## Create an annual samplings only data frame
+annual1 <- klee_long[klee_long$Date_final %like% "-06", ]        # Extract matching rows with %like%
+annual2 <- klee_long[klee_long$Date_final %like% "-05", ]  
+
+annual_all <- rbind(annual1, annual2)
+
+
+## remove unneeded objects to keep environment clean
+rm(list = c("kleedat", "kleedat_long", "dont_want", "annual1", "annual2"))

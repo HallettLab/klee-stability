@@ -20,3 +20,4 @@ ggplot(ppt2, aes(x=Date_final, y=Average)) +
   xlab("Date") + ylab("Average Monthly Precipitation (mm)") +
   theme_bw()
 
+rm(ppt)
