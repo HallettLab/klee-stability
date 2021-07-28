@@ -1,0 +1,17 @@
+---
+title: "KLEE_precipitation"
+author: "Carmen Ebel"
+date: "6/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(forcats)
+library(lubridate)
+library(codyn)
+library(ggpubr)
+
+source("precipitation_data_cleaning.R")
+```
+

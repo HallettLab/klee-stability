@@ -5,11 +5,9 @@ date: "4/18/2021"
 output: html_document
 ---
 
-
 # Data Prep
 ## Read in Data
 ```{r, echo=FALSE, include=FALSE}
-## Load Packages, Read in Data ##
 ## set working directory
 setwd("~/Repositories/klee-stability")
 
@@ -24,63 +22,66 @@ library(ggpubr)
 library(data.table)
 library(segmented)
 library(breakpoint)
-## source cleaned data
-source("klee_data_cleaning_current.R")
-source("precipitation_data_cleaning.R")
-```
+library(ggrepel)
+library(lme4)
+library(nlme)
 
+## source cleaned data
+source("klee_allyears_cleaning.R")
+
+## change Treatment to factor in all dataframes
+avg_biomass$TREATMENT <- as.factor(avg_biomass$TREATMENT)
+big5annual$TREATMENT <- as.factor(big5annual$TREATMENT)
+klee_annual$TREATMENT <- as.factor(klee_annual$TREATMENT)
+nondom$TREATMENT <- as.factor(nondom$TREATMENT)
+totcov$TREATMENT <- as.factor(totcov$TREATMENT)
+treats$TREATMENT <- as.factor(treats$TREATMENT)
+
+## Change treatment to an ordered factor
+klee_annual <- klee_annual %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+big5annual <- big5annual %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+nondom <- nondom %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+avg_biomass <- avg_biomass %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+totcov <- totcov %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+treats <- treats %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+```
 
 # Calculations
 ## Calculate Stability & Variance
 ``` {r,  echo=FALSE}
-## Calculate Community Stability ##
-commstab <- community_stability(klee_long, 
+## Calculate Community Stability for entire community
+commstab <- community_stability(klee_annual, 
                                 time.var = "Date_numeric", 
                                 abundance.var = "Pin_Hits", 
                                 replicate.var = "Unique_ID")
 
-## join with treatment info & calculate CV
-stability <- left_join(commstab, treats, by = "Unique_ID") %>% #join community stability with treatment info
-  mutate(CV = 1/stability) #calculate the CV by taking the inverse of stability
-
-## create a dataframe with mean & standard error of stability & CV by treatment
-mean_stability <- stability %>%
-  group_by(TREATMENT) %>%
-  summarize(mean_st = mean(stability), SEst = calcSE(stability), mean_cv = mean(CV), SECV = calcSE(CV))
-
-## Calculate Variance
-## calculate the variance of each plot over time
-v <- klee_long %>%
+## Calculate Variance of the full community
+v <- klee_annual %>%
   group_by(TREATMENT, Unique_ID) %>%
   summarise(variance = var(Pin_Hits))
 
-pinhits <- meantotcov %>%
+## Calculate Total Cover
+pinhits <- totcov %>% #this dataframe used in models
   group_by(TREATMENT, Unique_ID) %>%
-  summarize(pinhits = mean(Mean_TotCov))
+  summarize(pinhits = mean(totcov))
 
+
+## join stability measures with treatment info & calculate CV
+tstab <- left_join(commstab, treats, by = "Unique_ID") %>% #join comm stability with treatment info
+  mutate(CV = 1/stability) #calculate the CV as inverse of stability
 
 variance <- left_join(v, pinhits, by = c("TREATMENT", "Unique_ID"))
 
-meanvar <- variance %>%
-  group_by(TREATMENT) %>%
-  summarize(meanvar = mean(variance),
-            SEvar = calcSE(variance), 
-            meanbio = mean(pinhits), 
-            SEbio = mean(pinhits))
+stability <- left_join(tstab, variance, by = c("TREATMENT", "Unique_ID"))
 
-## reorder treatments to match grazing pressure.
-mean_stability$TREATMENT <- as.factor(mean_stability$TREATMENT) #change treatment to factor
-mean_stability$TREATMENT <- factor(mean_stability$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
-
-meanvar$TREATMENT <- as.factor(meanvar$TREATMENT) #change treatment to factor
-meanvar$TREATMENT <- factor(meanvar$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
-
-variance$TREATMENT <- as.factor(variance$TREATMENT) #change treatment to factor
-variance$TREATMENT <- factor(variance$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
-
-rm(list = c("v", "commstab"))
+rm(list = c("v", "commstab", "variance", "tstab"))
 ```
-
 
 ## Calculate Stability over a Moving Window ##
 ``` {r, echo = FALSE}
@@ -118,90 +119,68 @@ movingwindow_func <- function(input_data, timestep, ...) { ## function inputs = 
 }
 
 ## Use moving window function to calculate stability with ONLY June sampling points
-annual_stab3 <- movingwindow_func(input_data = annual_all, timestep = 3) %>%
-  mutate(window_size = 3)
-annual_stab5 <- movingwindow_func(input_data = annual_all, timestep = 5) %>%
+annual_stab5 <- movingwindow_func(input_data = klee_annual, timestep = 5) %>%
   mutate(window_size = 5)
-annual_stab7 <- movingwindow_func(input_data = annual_all, timestep = 7) %>%
+annual_stab7 <- movingwindow_func(input_data = klee_annual, timestep = 7) %>%
   mutate(window_size = 7)
-annual_stab10 <- movingwindow_func(input_data = annual_all, timestep = 10) %>%
+annual_stab10 <- movingwindow_func(input_data = klee_annual, timestep = 10) %>%
   mutate(window_size = 10)
 
-ann3_5 <- rbind(annual_stab3, annual_stab5)
-ann3_5_7 <- rbind(ann3_5, annual_stab7)
-
-stability_mw <- rbind(ann3_5_7, annual_stab10)
+#combine all
+ann5_7 <- rbind(annual_stab5, annual_stab7)
+stability_mw <- rbind(ann5_7, annual_stab10)
 
 stab_mw_tx <- left_join(stability_mw, treats, by="Unique_ID") %>%
   group_by(TREATMENT, timestep, window_size) %>%
   summarize(mean_stability = mean(stability), SE = calcSE(stability))
 
-stab_mw_tx$TREATMENT <- as.factor(stab_mw_tx$TREATMENT) #change treatment to factor
-stab_mw_tx$TREATMENT <- factor(stab_mw_tx$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
-
-rm(list = c("annual_stab3", "annual_stab5", "annual_stab7", "annual_stab10", "ann3_5", "ann3_5_7"))
-
+rm(list = c("annual_stab5", "annual_stab7", "annual_stab10", "ann5_7"))
 ```
 
-
 ## Synchrony
-
-### Calculate Synchrony Metrics
+### Calculate Loreau Synchrony
 ```{r,  echo=FALSE}
 ## Calculate Loreau synchrony metric
-loreau_synchrony <- synchrony(
-  annual_all,
+synchrony <- synchrony(
+  klee_annual,
   time.var = "Date_numeric",
   species.var = "SPECIES",
   abundance.var = "Pin_Hits",
   metric = "Loreau",
   replicate.var = "Unique_ID"
 )
-colnames(loreau_synchrony) <- c("Unique_ID", "loreau_synchrony") #rename columns
+colnames(synchrony) <- c("Unique_ID", "synchrony") #rename columns
 
-## Calculate Gross synchrony metric
-gross_synchrony <- synchrony(
-  annual_all,
+big5synchrony <- synchrony(
+  big5annual,
   time.var = "Date_numeric",
   species.var = "SPECIES",
   abundance.var = "Pin_Hits",
-  replicate.var = "Unique_ID",
-  metric="Gross")
-colnames(gross_synchrony) <- c("Unique_ID", "gross_synchrony") #rename columns
+  metric = "Loreau",
+  replicate.var = "Unique_ID"
+)
+colnames(big5synchrony) <- c("Unique_ID", "synchrony") #rename columns
 
-## join two synchrony metrics into one data frame
-synchrony <- left_join(loreau_synchrony, gross_synchrony, by = "Unique_ID") 
-
-## join with treatment data
-synchrony_tx <- inner_join(synchrony, treats, by = "Unique_ID")
-synchrony_stability <- left_join(synchrony, stability, by = "Unique_ID")
-
-## calculate mean & SE of metrics to get ready for graphing
-mean_synchrony <- left_join(synchrony, treats, by = "Unique_ID") %>%
-  pivot_longer(cols = loreau_synchrony:gross_synchrony, names_to = "Metric_Name", values_to = "Synchrony") %>% #pivot to long format
-  group_by(TREATMENT, Metric_Name) %>%
-  summarise(mean_value = mean(Synchrony), SE_value = calcSE(Synchrony))
-
-## reorder treatments to match grazing pressure.
-mean_synchrony$TREATMENT <- as.factor(mean_synchrony$TREATMENT) #change treatment to factor
-mean_synchrony$TREATMENT <- factor(mean_synchrony$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
-
-## join synchrony & stability data frames to get ready for graphing
-syn_stab <- inner_join(mean_synchrony, mean_stability, by = "TREATMENT")
-
-rm(list = c("loreau_synchrony", "gross_synchrony", "synchrony_tx", "synchrony"))
+nondomsynchrony <- synchrony(
+  nondom,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  metric = "Loreau",
+  replicate.var = "Unique_ID"
+)
+colnames(nondomsynchrony) <- c("Unique_ID", "synchrony") #rename columns
 ```
-
 
 ### Synchrony over a Moving Window
 ```{r, echo=FALSE}
 ## create function
-synchronymw_func <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+synchronymw_func <- function(input_data, timestep, ...) { ## function inputs = data frame and the time step (window size)
   
   n_samples <- length(unique(input_data$Date_final)) ## number of sampling points
   n_windows <- n_samples - timestep + 1 ## how many windows to iterate over 
-  mw_synchrony <- data.frame(matrix(ncol=4,nrow=(n_windows*length(unique(input_data$Unique_ID))))) ## create empty dataframe to contain output ## dimensions = # cols (3) x (uniqueID x timesteps)
-  colnames(mw_synchrony) <- c("Unique_ID", "loreau_synchrony", "timestep", "gross_synchrony")
+  mw_synchrony <- data.frame(matrix(ncol=3,nrow=(n_windows*length(unique(input_data$Unique_ID))))) ## create empty data frame to contain output ## dimensions = # cols (3) x (uniqueID x timesteps)
+  colnames(mw_synchrony) <- c("Unique_ID", "loreau_synchrony", "timestep")
   
   sample_points <- sort(unique(input_data$Date_numeric)) ## create ordered list of sample points
   
@@ -213,7 +192,6 @@ synchronymw_func <- function(input_data, timestep, ...) { ## function inputs = d
     
     temp <- input_data %>%
       filter(Date_numeric %in% temp_samplepts) ## filter the correct sample points from input data to run through the community stability function
-    
     
     ## Calculate Loreau synchrony metric
     temp_lsyn <- synchrony(
@@ -227,119 +205,115 @@ synchronymw_func <- function(input_data, timestep, ...) { ## function inputs = d
     
     colnames(temp_lsyn) <- c("Unique_ID", "loreau_synchrony") #rename columns
     temp_lsyn$timestep <- k ## create a column for timestep in the temporary data frame
-
-  ## Calculate Gross synchrony metric
-    temp_gsyn <- synchrony(
-      temp,
-      time.var = "Date_numeric",
-      species.var = "SPECIES",
-      abundance.var = "Pin_Hits",
-      replicate.var = "Unique_ID",
-      metric="Gross")
     
-    colnames(temp_gsyn) <- c("Unique_ID", "gross_synchrony") #rename columns
-    temp_gsyn$timestep <- k ## create a column for timestep in the temporary data frame
-    
-    ## join synchrony dataframes together
-    tempsynch <- left_join(temp_lsyn, temp_gsyn, by= c("Unique_ID", "timestep"))
-    
-    mw_synchrony[((k-1)*n_plots + 1):(k*n_plots),] <- tempsynch ## add synchrony calculations for one iteration to the moving window data frame
+    mw_synchrony[((k-1)*n_plots + 1):(k*n_plots),] <- temp_lsyn ## add synchrony calculations for one iteration to the moving window data frame
     ## ((i-1)*n_plots + 1):(i*n_plots) -> where to put each iteration of the loop
     
   }
-  
   return(mw_synchrony) ## retrieve data frame at the end
-  
 }
 
-
-synchrony4 <- synchronymw_func(input_data = annual_all, timestep = 4)  %>%
-  mutate(window_size = 4)
-synchrony5 <- synchronymw_func(input_data= annual_all, timestep = 5)  %>%
+## Calculate synchrony over a moving window
+synchrony5 <- synchronymw_func(input_data= klee_annual, timestep = 5)  %>%
   mutate(window_size = 5)
-synchrony7 <- synchronymw_func(input_data = annual_all, timestep = 7)  %>%
+synchrony7 <- synchronymw_func(input_data = klee_annual, timestep = 7)  %>%
   mutate(window_size = 7)
-synchrony10 <- synchronymw_func(input_data = annual_all, timestep = 10)  %>%
+synchrony10 <- synchronymw_func(input_data = klee_annual, timestep = 10)  %>%
   mutate(window_size = 10)
 
-syn45 <- rbind(synchrony4, synchrony5)
-syn457 <- rbind(syn45, synchrony7)
-synchrony_mw <- rbind(syn457, synchrony10)
+## Calculate for big5 species
+big5synchrony5 <- synchronymw_func(input_data= big5annual, timestep = 5)  %>%
+  mutate(window_size = 5)
+big5synchrony7 <- synchronymw_func(input_data = big5annual, timestep = 7)  %>%
+  mutate(window_size = 7)
+big5synchrony10 <- synchronymw_func(input_data = big5annual, timestep = 10)  %>%
+  mutate(window_size = 10)
+
+## Calculate for nondominant species
+nondomsynchrony5 <- synchronymw_func(input_data= nondom, timestep = 5)  %>%
+  mutate(window_size = 5)
+nondomsynchrony7 <- synchronymw_func(input_data = nondom, timestep = 7)  %>%
+  mutate(window_size = 7)
+nondomsynchrony10 <- synchronymw_func(input_data = nondom, timestep = 10)  %>%
+  mutate(window_size = 10)
+
+## join the dataframes
+syn57 <- rbind(synchrony5, synchrony7)
+synchrony_mw <- rbind(syn57, synchrony10)
 
 syn_mw_tx <- left_join(synchrony_mw, treats, by="Unique_ID") %>%
   group_by(TREATMENT, timestep, window_size) %>%
-  summarize(meanloreau = mean(loreau_synchrony), SEloreau = calcSE(loreau_synchrony), meangross = mean(gross_synchrony), SEgross=calcSE(gross_synchrony))
+  summarize(meanloreau = mean(loreau_synchrony), SEloreau = calcSE(loreau_synchrony))
+
+## join big5 dataframes
+big5syn57 <- rbind(big5synchrony5, big5synchrony7)
+big5synchrony_mw <- rbind(big5syn57, big5synchrony10)
+
+big5syn_mw_tx <- left_join(big5synchrony_mw, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, timestep, window_size) %>%
+  summarize(meanloreau = mean(loreau_synchrony), SEloreau = calcSE(loreau_synchrony))
+
+## join non-dominant dataframes
+nondomsyn57 <- rbind(nondomsynchrony5, nondomsynchrony7)
+nondomsynchrony_mw <- rbind(nondomsyn57, nondomsynchrony10)
+
+nondomsyn_mw_tx <- left_join(nondomsynchrony_mw, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, timestep, window_size) %>%
+  summarize(meanloreau = mean(loreau_synchrony), SEloreau = calcSE(loreau_synchrony))
+
 
 syn_mw_tx$TREATMENT <- as.factor(syn_mw_tx$TREATMENT) #change treatment to factor
-syn_mw_tx$TREATMENT <- factor(syn_mw_tx$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+syn_mw_tx$TREATMENT <- factor(syn_mw_tx$TREATMENT, levels = c("O", "W", "MW", "C", "WC", "MWC"))
 
-rm(list = c("syn45", "syn457", "synchrony4", "synchrony5", "synchrony7", "synchrony10"))
+big5syn_mw_tx$TREATMENT <- as.factor(big5syn_mw_tx$TREATMENT) #change treatment to factor
+big5syn_mw_tx$TREATMENT <- factor(big5syn_mw_tx$TREATMENT, levels = c("O", "W", "MW", "C", "WC", "MWC"))
 
+nondomsyn_mw_tx$TREATMENT <- as.factor(nondomsyn_mw_tx$TREATMENT) #change treatment to factor
+nondomsyn_mw_tx$TREATMENT <- factor(nondomsyn_mw_tx$TREATMENT, levels = c("O", "W", "MW", "C", "WC", "MWC"))
+
+rm(list = c("syn57", "synchrony5", "synchrony7", "synchrony10", "big5syn57", "nondomsyn57", "big5synchrony5", "big5synchrony7", "big5synchrony10", "nondomsynchrony5", "nondomsynchrony7", "nondomsynchrony10"))
 ```
+
 
 ## Dominance
 ### Calculate Berger-Parker Dominance
 ```{r, echo=FALSE}
-## Calculate Berger-Parker Dominance ##
-#BP dominance: d = Nmax/N (relative abundance of most dominant species)
-BP_dom <- klee_long %>%
+## calculate Berger-Parker Dominance for each unique ID at each date
+BP_dominance <- klee_annual %>%
   group_by(TREATMENT, Unique_ID, Date_final) %>% #group by treatment, plot, and date
   mutate(rank = rank(Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
-  mutate(tot_abund = sum(Pin_Hits)) %>% #calculate total abundance
+  mutate(tot_abund = sum(Pin_Hits)) %>% #create column for total abundance in each plot
   filter(rank == max(rank)) %>% #only include most abundant species in each plot
-  summarise(BP_dominance = Pin_Hits/tot_abund) %>% #calculate Berger-Parker dominance index
-  group_by(TREATMENT, Date_final) %>% #group by treatment and date
-  summarise(mean_dom = mean(BP_dominance), SEdom = calcSE(BP_dominance)) #calculate mean and SE for each treatment at each date
+  summarise(BP_dominance = Pin_Hits/tot_abund) #calculate Berger-Parker dominance index
+  ## this data frame should be suitable for the ANOVA?
 
-BP_dom2 <- klee_long %>%
-  group_by(TREATMENT, Unique_ID, Date_final) %>% #group by treatment, plot, and date
-  mutate(rank = rank(Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
-  mutate(tot_abund = sum(Pin_Hits)) %>% #calculate total abundance
-  filter(rank == max(rank)) %>% #only include most abundant species in each plot
-  summarise(BP_dominance = Pin_Hits/tot_abund) %>% #calculate Berger-Parker dominance index
-  group_by(TREATMENT, Unique_ID, Date_final) %>% #group by treatment and date
-  summarise(mean_dom = mean(BP_dominance), SEdom = calcSE(BP_dominance))
+## Calculate the mean Berger-Parker dominance by: 
+  ## TREATMENT and DATE - to graph mean dominance over time
+meanann_BPdom <- BP_dominance %>%
+  group_by(TREATMENT, Date_final) %>%
+  summarize(mean_dom = mean(BP_dominance), SEdom = calcSE(BP_dominance), vardom = var(BP_dominance))
 
-## calculate the mean dominance index by treatment
-avg_BPdom <- BP_dom %>%
-  group_by(TREATMENT) %>% #group by treatment
-  summarise(avg_dom = mean(mean_dom), SE = calcSE(mean_dom)) #take mean across time for each treatment
-
-dominance <- BP_dom2 %>%
-  group_by(Unique_ID) %>%
-  summarize(dominance = mean(mean_dom))
-
-dominance <- left_join(dominance, treats, by = "Unique_ID")
-dominance <- left_join(dominance, stability, by = c("Unique_ID", "BLOCK", "TREATMENT"))
-
-
-#reorder treatments to match grazing pressure.
-BP_dom$TREATMENT <- as.factor(BP_dom$TREATMENT) #change treatment to factor
-BP_dom$TREATMENT <- factor(BP_dom$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
-avg_BPdom$TREATMENT <- as.factor(avg_BPdom$TREATMENT) #change treatment to factor
-avg_BPdom$TREATMENT <- factor(avg_BPdom$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
-
-## join stability & dominance data frames
-dom_stab <- inner_join(mean_stability, avg_BPdom, by = "TREATMENT")
-
-rm(BP_dom2)
+  ## TREATMENT and UNIQUE ID - to use eventually for models
+meanplot_BPdom <- BP_dominance %>%
+  group_by(TREATMENT, Unique_ID) %>%
+  summarize(mean_dom = mean(BP_dominance), SEdom = calcSE(BP_dominance), vardom = var(BP_dominance))
 ```
-
-
+  
 ### Calculate Dominance over a Moving Window
-
 ```{r, echo=FALSE}
-
 dominancemw_func <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
   
   n_samples <- length(unique(input_data$Date_final)) ## number of sampling points
   n_windows <- n_samples - timestep + 1 ## how many windows to iterate over 
-  movingwindow <- data.frame(matrix(ncol=4,nrow=(n_windows*length(unique(input_data$TREATMENT))))) ## create empty dataframe to contain output ## dimensions = # cols (3) x (uniqueID x timesteps)
+  
+  movingwindow <- data.frame(TREATMENT = NA, timestep = NA, mean_dominance = NA, SE_dominance = NA)
+  
   colnames(movingwindow) <- c("TREATMENT", "timestep", "mean_dominance", "SE_dominance")
   sample_points <- sort(unique(input_data$Date_numeric)) ## create ordered list of sample points
   
   n_plots <- length(unique(input_data$Unique_ID)) ## number of unique plots
   n_trt <- length(unique(input_data$TREATMENT))
+  treatments <- unique(input_data$TREATMENT)
   
   for (i in 1:n_windows){
     
@@ -359,10 +333,10 @@ dominancemw_func <- function(input_data, timestep, ...) { ## function inputs = d
     
     mean_dom <- temp_dom %>%
       group_by(TREATMENT, timestep) %>%
-      summarise(BP_dom = mean(BP_dominance), SEBP = calcSE(BP_dominance))
+      summarise(mean_dominance = mean(BP_dominance), SE_dominance = calcSE(BP_dominance))
     
-    movingwindow[((i-1)*n_trt + 1):(i*n_trt),] <- mean_dom ## add stability calculations for one iteration to the moving window data frame
-    ## ((i-1)*n_plots + 1):(i*n_plots) -> where to put each iteration of the loop
+    
+    movingwindow <- rbind(movingwindow, mean_dom)
     
   }
   
@@ -370,302 +344,597 @@ dominancemw_func <- function(input_data, timestep, ...) { ## function inputs = d
   
 }
 
-dom3 <- dominancemw_func(input_data = annual_all, timestep = 3) %>%
-  mutate(window_size = 3)
-dom5 <- dominancemw_func(input_data = annual_all, timestep = 5) %>%
+## Run dominance over a moving window function
+dom5 <- dominancemw_func(input_data = klee_annual, timestep = 5) %>%
   mutate(window_size = 5)
-dom7 <- dominancemw_func(input_data = annual_all, timestep = 7) %>%
+dom5 <- dom5[-1,]
+dom7 <- dominancemw_func(input_data = klee_annual, timestep = 7) %>%
   mutate(window_size = 7)
-dom10 <- dominancemw_func(input_data = annual_all, timestep = 10) %>%
+dom7 <- dom7[-1,]
+dom10 <- dominancemw_func(input_data = klee_annual, timestep = 10) %>%
   mutate(window_size = 10)
+dom10 <- dom10[-1,]
 
-dom35 <- rbind(dom3, dom5)
-dom357 <- rbind(dom35, dom7)
-dominance_mw <- rbind(dom357, dom10)
+## combine separate dataframes
+dom57 <- rbind(dom5, dom7)
+dominance_mw <- rbind(dom57, dom10)
 
 dominance_mw$TREATMENT <- as.factor(dominance_mw$TREATMENT) #change treatment to factor
-dominance_mw$TREATMENT <- factor(dominance_mw$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+dominance_mw$TREATMENT <- factor(dominance_mw$TREATMENT, levels = c("O", "W", "MW", "C", "WC", "MWC"))
 
-rm(list = c("dom35", "dom357", "dom3", "dom5", "dom7", "dom10"))
-
+rm(list = c("dom57", "dom5", "dom7", "dom10"))
 ```
 
 
-### Calculate Species Rank and Stability
-```{r, echo=FALSE}
-## rank species in order of abundance with 1 being most abundant.
-rankneg <- klee_long %>%
-  group_by(TREATMENT, Unique_ID, Date_final) %>%
-  mutate(rank = rank(-Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
-  mutate(tot_abund = sum(Pin_Hits)) #calculate total abundance
-
-
-trt <- unique(klee_long$TREATMENT) ## create vector of treatments for loop to iterate over
-
-dominant.sp <- data.frame(SPECIES=NA, stability=NA, rank=NA, SE=NA, TREATMENT=NA) ## create empty dataframe to contain output. Don't know exact number of rows, will need to just make empty columns and bind in loop
-
-domsp <- data.frame(TREATMENT=NA, Date_final=NA, SPECIES=NA,mean=NA, SE=NA)
-
-## create for loop
-for (j in 1:length(trt)) {
-  
-  ## pull out the jth sampling unit from the data
-  temp <- rankneg %>%
-    filter(TREATMENT == trt[j])
-  
-  ## filter to contain only the top 2 most abundant species at any point in the time series
-  ranktemp <- temp %>%
-    filter(rank < 3)
-  
-  ## make a unique vector of top 2 abundant sp at any point
-  tempsp <- unique(ranktemp$SPECIES)
-  
-  ## filter by top 2 species
-  tempspdf <- temp %>%
-    filter(SPECIES %in% tempsp) %>%
-    group_by(TREATMENT, Date_final, SPECIES) %>%
-    summarize(mean=mean(Pin_Hits), SE=calcSE(Pin_Hits))
-  
-  ## save this to a new data frame
-  domsp <- rbind(tempspdf, domsp)
-
-  
-  ## filter entire time series by top 2 species to get their full time series. Calculate stability
-  tempstab <- temp %>%
-    filter(SPECIES %in% tempsp) %>%
-    group_by(BLOCK, SPECIES) %>%
-    summarise(temp_mean = mean(Pin_Hits), sdhits = sd(Pin_Hits), sp_stability = temp_mean/sdhits, meanrank = mean(rank)) %>%
-    ungroup() %>%
-    group_by(SPECIES) %>%
-    summarise(stability = mean(sp_stability), rank=mean(meanrank), SE = calcSE(sp_stability)) %>%
-    mutate(TREATMENT = trt[j])
-  
-  ## save stability calculations in new dataframe
-  dominant.sp <- rbind(tempstab, dominant.sp)
-  
-}
-
-## Change mean rank to integer
-dominant.sp <- dominant.sp %>%
-  mutate(rank_int = ifelse(rank <= 1.49, 1, 
-                           ifelse(rank > 1.49 & rank <=2.49, 2,  
-                                  ifelse(rank > 2.49 & rank <=3.49, 3,
-                                         ifelse(rank >3.49 & rank <=4.49, 4,
-                                                ifelse(rank >4.49 & rank <=5.49, 5,
-                                                       ifelse(rank > 5.49 & rank <=6.49, 6,
-                                                              ifelse(rank >6.49 & rank <=7.49, 7,
-                                                                     ifelse(rank>7.49 & rank <=8.49, 8,
-                                                                            ifelse(rank>8.49 & rank <=9.49,9,
-                                                                                   ifelse(rank>9.49 & rank <=10.49, 10, 
-                                                                                          ifelse(rank>10.49 & rank <=11.49, 11,
-                                                                                                 ifelse(rank >11.49 & rank <=12.49, 12, 
-                                                                                                        ifelse(rank >12.49 & rank <= 13.49, 13,
-                                                                                                               ifelse(rank >13.49 & rank <=14.49, 14, 15)))))))))))))))
-
-```
-
-
+## Richness
 ### Calculate Species Richness
 ```{r, echo=FALSE}
-## Calculate total species richness across the time series 
-#may need to eventually use presence-absence data (accounts for a lot more rare species)
-totalrich <- klee_long %>%
-  group_by(TREATMENT, Unique_ID) %>%
-  select(Unique_ID, SPECIES, TREATMENT) %>%
-  unique() %>%
-  summarise(totalrich = n()) %>%
-  group_by(TREATMENT) %>%
-  summarise(meantotrich = mean(totalrich), totrichSE = calcSE(totalrich))
-
-## Calculate Richness at each Time step 
-#calculate richness by grouping by unique ID and date and counting # of observations.
-ann_rich <- klee_long %>%
-  group_by(Unique_ID, Date_final) %>%
+## ALL SPECIES 
+## Calculate species richness for each plot at each point in time
+rich <- klee_annual %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>% ## group by each plot at each date
   summarise(richness = n())
+  ## use this dataframe for the ANOVA?
 
-rich_time <- klee_long %>%
-  group_by(TREATMENT, Unique_ID, Date_final) %>%
-  summarise(richness = n()) %>%
+## Calculate the mean richness by: 
+  ## TREATMENT and DATE
+meanannrich <- rich %>%
   group_by(TREATMENT, Date_final) %>%
   summarise(meanrich = mean(richness), SErich = calcSE(richness))
-
-## Mean Annual Richness
-#calculate the average species richness for each plot then each treatment. Average by plot first then by treatment
-richness <- left_join(ann_rich, treats, by="Unique_ID") %>%
+  ## TREATMENT and UNIQUE_ID
+meanrichplot <- rich %>%
   group_by(TREATMENT, Unique_ID) %>%
-  summarise(meanSR_plot = mean(richness))
+  summarise(meanrich = mean(richness, SErich = calcSE(richness)), varrich = var(richness))
 
-richness <- left_join(richness, stability, by = c("Unique_ID", "TREATMENT"))
 
-avg_rich <- left_join(ann_rich, treats, by="Unique_ID") %>%
+## BIG 5 SPECIES 
+## Calculate species richness for each plot at each point in time
+big5rich <- big5annual %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>% ## group by each plot at each date
+  summarise(richness = n())
+
+## Calculate the mean richness by: 
+  ## TREATMENT and DATE
+big5meanannrich <- big5rich %>%
+  group_by(TREATMENT, Date_final) %>%
+  summarise(meanrich = mean(richness), SErich = calcSE(richness))
+  ## TREATMENT and UNIQUE_ID
+big5meanrichplot <- big5rich %>%
   group_by(TREATMENT, Unique_ID) %>%
-  summarise(meanSR_plot = mean(richness)) %>%
+  summarise(meanrich = mean(richness, SErich = calcSE(richness)), varrich = var(richness))
+
+
+## NON-DOMINANT SPECIES
+## Calculate species richness for each plot at each point in time
+nondomrich <- nondom %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>% ## group by each plot at each date
+  summarise(richness = n())
+
+## Calculate the mean richness by: 
+  ## TREATMENT and DATE
+nondommeanannrich <- nondomrich %>%
+  group_by(TREATMENT, Date_final) %>%
+  summarise(meanrich = mean(richness), SErich = calcSE(richness))
+  ## TREATMENT and UNIQUE_ID
+nondommeanrichplot <- nondomrich %>%
+  group_by(TREATMENT, Unique_ID) %>%
+  summarise(meanrich = mean(richness, SErich = calcSE(richness)), varrich = var(richness))
+
+rm(list = c("rich", "big5rich", "nondomrich"))
+```
+
+
+## Create one dataframe with all biotic mechanisms + stability 
+```{r, echo = FALSE}
+## Create data frame with one value of stability & mechanisms for each plot
+synchrony_stability <- left_join(synchrony, stability, by = "Unique_ID")
+tss <- left_join(synchrony_stability, meanplot_BPdom, by = c("Unique_ID", "TREATMENT")) 
+stability_mechanisms <- left_join(tss, meanrichplot, by = c("Unique_ID", "TREATMENT"))
+
+big5synchrony_stability <- left_join(big5synchrony, stability, by = "Unique_ID")
+b5tss <- left_join(big5synchrony_stability, meanplot_BPdom, by = c("Unique_ID", "TREATMENT")) 
+big5stability_mechanisms <- left_join(b5tss, big5meanrichplot, by = c("Unique_ID", "TREATMENT"))
+
+nondomsynchrony_stability <- left_join(nondomsynchrony, stability, by = "Unique_ID")
+ndtss <- left_join(nondomsynchrony_stability, meanplot_BPdom, by = c("Unique_ID", "TREATMENT")) 
+nondomstability_mechanisms <- left_join(ndtss, nondommeanrichplot, by = c("Unique_ID", "TREATMENT"))
+
+## Create data frame with one value of stability & mechanisms for each treatment
+meanstab_mech <- stability_mechanisms %>%
   group_by(TREATMENT) %>%
-  summarise(meanSR_tx = mean(meanSR_plot), SESR_tx = calcSE(meanSR_plot))
+  summarise(mean_st = mean(stability), SE_st = calcSE(stability), mean_syn = mean(synchrony), SE_syn = calcSE(synchrony), 
+            mean_dom = mean(mean_dom), SE_dom = calcSE(mean_dom), mean_rich = mean(meanrich), SE_rich = calcSE(meanrich), 
+            mean_var = mean(variance), SE_var = calcSE(variance), mean_bio = mean(pinhits), SE_bio = calcSE(pinhits), 
+            mean_vardom = mean(vardom), SE_vardom = calcSE(vardom), mean_varrich = mean(varrich), SE_varrich = calcSE(varrich),
+            mean_CV = mean(CV), SE_CV = calcSE(CV))
 
-## Join richness and stability data
-rtemp <- left_join(avg_rich, mean_stability, by = "TREATMENT")
-richstab <- left_join(rtemp, totalrich, by="TREATMENT")
+## Create Big 5 data frame with one value of stability & mechanisms for each treatment
+big5meanstab_mech <- big5stability_mechanisms %>%
+  group_by(TREATMENT) %>%
+  summarise(mean_st = mean(stability), SE_st = calcSE(stability), mean_syn = mean(synchrony), SE_syn = calcSE(synchrony), 
+            mean_dom = mean(mean_dom), SE_dom = calcSE(mean_dom), mean_rich = mean(meanrich), SE_rich = calcSE(meanrich), 
+            mean_var = mean(variance), SE_var = calcSE(variance), mean_bio = mean(pinhits), SE_bio = calcSE(pinhits), 
+            mean_vardom = mean(vardom), SE_vardom = calcSE(vardom), mean_varrich = mean(varrich), SE_varrich = calcSE(varrich),
+            mean_CV = mean(CV), SE_CV = calcSE(CV))
 
-#reorder treatments to match grazing pressure.
-richstab$TREATMENT <- as.factor(richstab$TREATMENT) #change treatment to factor
-richstab$TREATMENT <- factor(richstab$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
+nondommeanstab_mech <- nondomstability_mechanisms %>%
+  group_by(TREATMENT) %>%
+  summarise(mean_st = mean(stability), SE_st = calcSE(stability), mean_syn = mean(synchrony), SE_syn = calcSE(synchrony), 
+            mean_dom = mean(mean_dom), SE_dom = calcSE(mean_dom), mean_rich = mean(meanrich), SE_rich = calcSE(meanrich), 
+            mean_var = mean(variance), SE_var = calcSE(variance), mean_bio = mean(pinhits), SE_bio = calcSE(pinhits), 
+            mean_vardom = mean(vardom), SE_vardom = calcSE(vardom), mean_varrich = mean(varrich), SE_varrich = calcSE(varrich),
+            mean_CV = mean(CV), SE_CV = calcSE(CV))
 
-rich_time$TREATMENT <- as.factor(rich_time$TREATMENT) #change treatment to factor
-rich_time$TREATMENT <- factor(rich_time$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
-
-rm(list = c("rtemp", "avg_rich", "ann_rich", "totalrich"))
+rm(list = c("synchrony_stability", "big5synchrony_stability", "nondomsynchrony_stability", "tss", "b5tss", "ndtss"))
 ```
 
 
 # Significance Testing
-## ANOVAs and Linear Models
+## ANOVAs
 ```{r}
+## STABILITY AND GRAZING TREATMENT ----
 ## is stability significantly different by grazing treatment?
-## use stability data frame
 fitstability <- aov(stability~TREATMENT, data = stability)
 summary(fitstability)
 
 TukeyHSD(fitstability)
-## O is significantly different from C, MW, MWC, WC
-## WC-W are marginally significantly different
-## other treatments not significantly different from each other
+#significant differences: 
+  ## MW-O (marginal)
+  ## C-O
+  ## MWC-O
+  ## WC-O
+  ## C-W (marginal)
+  ## MWC-W
+  ## WC-W
 
-
+## is variance significantly different by grazing treatment?
 fitvariance <- aov(variance~TREATMENT, data=variance)
 summary(fitvariance)
 
 TukeyHSD(fitvariance)
+#significant differences
+  ## C-O (marginal)
+  ## MWC-O
+  ## WC-O
+  ## MWC-W (marginal)
+  ## WC-W
 
-
-fitpinhits <- aov(pinhits~TREATMENT, data=pinhits)
+## is total cover different by grazing treatment?
+fitpinhits <- aov(pinhits~TREATMENT, data=variance)
 summary(fitpinhits)
 TukeyHSD(fitpinhits)
+#significant differences
+  ## MW-O (marginal)
+  ## C-O
+  ## MWC-O
+  ## WC-O
+  ## C-W
+  ## MWC-W
+  ## WC-W
+  ## MWC-MW
+  ## WC-MW
 
-## is the dominance index significantly different by grazing treatment?
-fitdom <- aov(dominance~TREATMENT, data=dominance)
+
+## DOMINANCE and GRAZING TREATMENT ----
+  ## is berger-parker dominance significantly different by grazing treatment?
+meanplot_BPdom <- meanplot_BPdom %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+fitdom <- aov(mean_dom~TREATMENT, data=meanplot_BPdom)
 summary(fitdom)
-## treatment not a significant effect
+TukeyHSD(fitdom)
+## significant differences
+  ## MWC-O
+  ## MWC-W (marginal)
 
 
-## is richness significantly different by grazing treatment?
-fitrich <- aov(meanSR_plot~TREATMENT, data = richness)
+## RICHNESS AND GRAZING TREATMENT ----
+  ## is richness significantly different by grazing treatment?
+fitrich <- aov(meanrich~TREATMENT, data = meanrichplot)
 summary(fitrich)
 ## treatment not a significant effect
 
+fitbig5rich <- aov(meanrich~TREATMENT, data = big5meanrichplot)
+summary(fitbig5rich)
+## treatment not a significant effect
 
-## is synchrony significantly different by grazing treatment?
-fitlsyn <- aov(loreau_synchrony~TREATMENT, data = synchrony_stability)
-summary(fitlsyn)
-TukeyHSD(fitlsyn)
-## O is significantly different from C, MW, MWC, WC
-## W-MWC significant
-## WC-W are significantly different
-## other treatments not significantly different from each other
-
-fitgsyn <- aov(gross_synchrony~TREATMENT, data = synchrony_stability)
-summary(fitgsyn)
-TukeyHSD(fitgsyn)
-## MWC-O marginally significant
-## WC-0 significant
-## nothing else is significantly different
+fitnondomrich <- aov(meanrich~TREATMENT, data = nondommeanrichplot)
+summary(fitnondomrich)
+## treatment not a significant effect
 
 
+## SYNCHRONY AND GRAZING TREATMENT ----
+  ## is synchrony significantly different by grazing treatment?
+fitsyn <- aov(loreau_synchrony~TREATMENT, data = synchrony_stability)
+summary(fitsyn)
+TukeyHSD(fitsyn)
+## significant differences
+  ## MWC-O
+  ## WC-O
+  ## MWC-W
+  ## WC-W
+
+fitbig5syn <- aov(loreau_synchrony~TREATMENT, data = big5synchrony_stability)
+summary(fitbig5syn)
+TukeyHSD(fitbig5syn)
+
+fitnondomsyn <- aov(loreau_synchrony~TREATMENT, data = nondomsynchrony_stability)
+summary(fitnondomsyn)
+#not significant
+```
+
+## Linear Models
+```{r}
+## SYNCHRONY AND STABILITY ----
 ## Does synchrony predict stability?
 fitstablsyn <- lm(stability~loreau_synchrony, data = synchrony_stability)
 summary(fitstablsyn)
 ## significant
 
-fitstabgsyn <- lm(stability~gross_synchrony, data = synchrony_stability)
-summary(fitstabgsyn)
+fitbig5synstab <- lm(stability~loreau_synchrony, data=big5synchrony_stability)
+summary(fitbig5synstab)
+## significant 
+
+fitnondomsynstab <- lm(stability~loreau_synchrony, data = nondomsynchrony_stability)
+summary(fitnondomsynstab)
+## significant
 
 
-fitstabdom <- lm(stability~dominance, data = dominance)
+## DOMINANCE AND STABILITY ----
+## Does dominance predict stability
+fitstabdom <- lm(stability~mean_dom+vardom, data = dominance_stability)
 summary(fitstabdom)
-## marginally significant
+## significant main effect of mean dominance, no significant effect of the variance of dominance or any interactions
 
-fitstabrich <- lm(stability~meanSR_plot, data = richness)
+## Does variation in species dominance predict stability?
+fitstabvardom <- lm(stability~vardom, data = dominance_stability)
+summary(fitstabvardom)
+## this gives a marginally significant effect, but I'm not sure if it's incorrect to do two separate models like this?
+
+
+## RICHNESS AND STABILITY ----
+## Does richness predict stability
+fitstabrich <- lm(stability~meanrich, data = richness_stability)
 summary(fitstabrich)
-## marginally significant
+## not significant
+
+fitbig5stabrich <- lm(stability~meanrich, data = big5richness_stability)
+summary(fitbig5stabrich)
+## not significant
+
+fitnondomstabrich <- lm(stability~meanrich, data = nondomrichness_stability)
+summary(fitnondomstabrich)
+## not significant
 ```
 
-## Correlation Analysis for Moving Windows
+## Mixed Effects Models
 ```{r}
+## Try Treatment vs. Stability & Mechanisms models using lme4 package
+  ## BLOCK as a random effect
+fitgrst <- lmer(stability~TREATMENT + (1|BLOCK), data = stability_mechanisms)
+summary(fitgrst)
 
-## correlation test
+fitgrsy <- lmer(synchrony~TREATMENT + (1|BLOCK), data = stability_mechanisms)
+summary(fitgrsy)
+
+fitgrdo <- lmer(mean_dom~TREATMENT + (1|BLOCK), data = stability_mechanisms)
+summary(fitgrdo)
+
+fitgrri <- lmer(mean_rich~TREATMENT + (1|BLOCK), data = stability_mechanisms)
+summary(fitgrri)
+
+
+## Try Stability vs. Mechanism model variations
+## non-linear mixed effects model in nlme
+nlme(stability~SSasymp(mean_dom, meanrich, synchrony, vardom, varrich), 
+     data = stability_mechanisms,
+     random = ~1|BLOCK, 
+     groups = TREATMENT
+     )
+
+## linear mixed effects model in nlme
+lme(stability~mean_dom+meanrich+synchrony+TREATMENT, random = ~1|BLOCK, data = stability_mechanisms)
+
+## linear mixed effects model in lme4
+lmer(stability~mean_dom+meanrich+synchrony+TREATMENT +(1|BLOCK), data = stability_mechanisms)
+
+```
+
+
+## Correlation Analysis for Moving Windows
+```{r, echo=FALSE}
+## Stability Dominance Correlation test ---- 
+##create data frame for correlation test
 stab_dom_mw <- left_join(stab_mw_tx, dominance_mw, by = c("TREATMENT", "timestep", "window_size"))
-stabdO_mw_3 <- stab_dom_mw %>%
-  filter(TREATMENT == "0", window_size == "3")
 
-cor.test(stabdO_mw_3$mean_dominance, stabdO_mw_3$mean_stability,
-         alternative = "two.sided",
-         method = "pearson")
-## no correlation
+## create vector of treatments
+trt <- unique(stab_dom_mw$TREATMENT)
 
-## does synchrony correlate with stability changes over time?
-stab_syn_mw <- left_join(stab_mw_tx, syn_mw_tx, by = c("TREATMENT", "timestep", "window_size")) %>%
-  filter(window_size > 3)
+## create vector of window size
+wsize <- unique(stab_dom_mw$window_size)
 
-stabsynO_mw_5 <- stab_syn_mw %>%
-  filter(TREATMENT == "0", window_size == "5")
-
-cor.test(stabsynO_mw_5$meanloreau, stabsynO_mw_5$mean_stability,
-         alternative = "two.sided",
-         method = "pearson")
-
-stabsynO_mw_7 <- stab_syn_mw %>%
-  filter(TREATMENT == "0", window_size == "7")
-
-cor.test(stabsynO_mw_7$meanloreau, stabsynO_mw_7$mean_stability,
-         alternative = "two.sided",
-         method = "pearson")
-
-stabsynO_mw_10 <- stab_syn_mw %>%
-  filter(TREATMENT == "0", window_size == "10")
-
-cor.test(stabsynO_mw_10$meanloreau, stabsynO_mw_10$mean_stability,
-         alternative = "two.sided",
-         method = "pearson")
-## unsure if I am interpreting this correctly, but: 
-  ## strong negative correlations between loreau synchrony and stability for all window sizes
+corr_dom <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficient = NA, p_val = NA) ## create empty dataframe to contain output
 
 
+for (i in 1:length(trt)) {
+  
+  ## select the ith treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- stab_dom_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortst <- cor.test(tempw$mean_dominance, tempw$mean_stability, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+    t <- tempw %>%
+      group_by(TREATMENT) %>%
+      summarise(window_size = mean(window_size)) %>%
+      mutate(corr_coefficient = cortst$estimate, p_val = cortst$p.value)
+     
+    corr_dom <- rbind(corr_dom, t)
+    
+  }
+  
+}
+corr_dom <- corr_dom[-1,]
 
-## should probably do breakpoint analysis in a for-loop to avoid repeating lines of code...
+## create a variable indicating significance of p-value
+corr_dom <- corr_dom %>%
+  mutate(significant = ifelse(p_val < 0.051, "S", 
+                              ifelse(p_val > 0.05 & p_val < 0.07, "M", "NS")))
+
+print(corr_dom)
 
 
+## Does Synchrony correlate with Stability changes over time? ----
+stab_syn_mw <- left_join(stab_mw_tx, syn_mw_tx, by = c("TREATMENT", "timestep", "window_size"))
+
+## create vector of treatments
+trt <- unique(stab_syn_mw$TREATMENT)
+
+## create vector of window size
+wsize <- unique(stab_syn_mw$window_size)
+
+corr_syn <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficientl = NA, lp_val = NA) ## create empty dataframe to contain output
 
 
-## use package breakpoint to check for breakpoints in the moving window analysis
-## data frame must be single column
-O_bp7 <- dominance_mw %>%
-  filter(TREATMENT == "0", window_size == "7") %>%
-  select(mean_dominance)
-CE.Normal.Mean(O_bp7, penalty = "AIC")
-## no breakpoints are estimated
+for (i in 1:length(trt)) {
+  
+  ## select the treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- stab_syn_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortstl <- cor.test(tempw$meanloreau, tempw$mean_stability, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+     #cortstg <- cor.test(tempw$meangross, tempw$mean_stability, 
+         #    alternative = "two.sided", 
+          #   method = "pearson")
+    
+     t <- tempw %>%
+       group_by(TREATMENT) %>% 
+       summarise(window_size = mean(window_size)) %>%
+       mutate(corr_coefficientl = cortstl$estimate, lp_val = cortstl$p.value) #%>%
+      # mutate(corr_coefficientg = cortstg$estimate, gp_val = cortstg$p.value)
+     
+    corr_syn <- rbind(corr_syn, t)
+  }
+  
+}
 
-O_bp3 <- dominance_mw %>%
-  filter(TREATMENT == "0", window_size == "3") %>%
-  select(mean_dominance)
-CE.Normal.Mean(O_bp3, penalty = "AIC")
-## 1 breakpoint at 6
+corr_syn <- corr_syn[-1,]
+
+## create a variable indicating significance of p-value
+corr_syn <- corr_syn %>%
+  mutate(significant = ifelse(lp_val < 0.051, "S", 
+                              ifelse(lp_val > 0.05 & lp_val < 0.07, "M", "NS")))
+
+print(corr_syn)
 
 
-O_bpstab5 <- stab_mw_tx %>%
-  filter(TREATMENT == "0", window_size == "5") %>%
-  ungroup() %>%
-  select(mean_stability)
+## Big 5 Synchrony Stability Correlation Test ----
+big5stab_syn_mw <- left_join(stab_mw_tx, big5syn_mw_tx, by = c("TREATMENT", "timestep", "window_size"))
 
-CE.Normal.Mean(O_bpstab5, penalty = "AIC")
-## no breakpoints are estimated
+## create vector of treatments
+trt <- unique(big5stab_syn_mw$TREATMENT)
 
-O_bpstab3 <- stab_mw_tx %>%
-  filter(TREATMENT == "0", window_size == "3") %>%
-  ungroup() %>%
-  select(mean_stability)
+## create vector of window size
+wsize <- unique(big5stab_syn_mw$window_size)
 
-CE.Normal.Mean(O_bpstab3, penalty = "AIC")
-## no breakpoints are estimated
+b5corr_syn <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficientl = NA, lp_val = NA) ## create empty dataframe to contain output
+
+
+for (i in 1:length(trt)) {
+  
+  ## select the treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- big5stab_syn_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortstl <- cor.test(tempw$meanloreau, tempw$mean_stability, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+     t <- tempw %>%
+       group_by(TREATMENT) %>% 
+       summarise(window_size = mean(window_size)) %>%
+       mutate(corr_coefficientl = cortstl$estimate, lp_val = cortstl$p.value) #%>%
+      # mutate(corr_coefficientg = cortstg$estimate, gp_val = cortstg$p.value)
+
+    b5corr_syn <- rbind(b5corr_syn, t)
+  }
+  
+}
+
+b5corr_syn <- b5corr_syn[-1,]
+
+## create a variable indicating significance of p-value
+b5corr_syn <- b5corr_syn %>%
+  mutate(significant = ifelse(lp_val < 0.051, "S", 
+                              ifelse(lp_val > 0.05 & lp_val < 0.07, "M", "NS")))
+print(b5corr_syn)
+
+
+## Non Dominant Synchrony Stability Correlation Test ----
+nondomstab_syn_mw <- left_join(stab_mw_tx, nondomsyn_mw_tx, by = c("TREATMENT", "timestep", "window_size"))
+
+## create vector of treatments
+trt <- unique(nondomstab_syn_mw$TREATMENT)
+
+## create vector of window size
+wsize <- unique(nondomstab_syn_mw$window_size)
+
+ndcorr_syn <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficientl = NA, lp_val = NA) ## create empty dataframe to contain output
+
+
+for (i in 1:length(trt)) {
+  
+  ## select the treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- nondomstab_syn_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortstl <- cor.test(tempw$meanloreau, tempw$mean_stability, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+     t <- tempw %>%
+       group_by(TREATMENT) %>% 
+       summarise(window_size = mean(window_size)) %>%
+       mutate(corr_coefficientl = cortstl$estimate, lp_val = cortstl$p.value)# %>%
+     #  mutate(corr_coefficientg = cortstg$estimate, gp_val = cortstg$p.value)
+
+    ndcorr_syn <- rbind(ndcorr_syn, t)
+  }
+}
+
+ndcorr_syn <- ndcorr_syn[-1,]
+
+## create a variable indicating significance of p-value
+ndcorr_syn <- ndcorr_syn %>%
+  mutate(significant = ifelse(lp_val < 0.051, "S", 
+                              ifelse(lp_val > 0.05 & lp_val < 0.07, "M", "NS")))
+
+print(ndcorr_syn)
+
+corr_syn$TREATMENT <- as.factor(corr_syn$TREATMENT) #change treatment to factor
+corr_syn$TREATMENT <- factor(corr_syn$TREATMENT, levels = c("O", "W", "MW", "C", "WC", "MWC"))
+
+## Make one correlation data frame
+corr_syn <- corr_syn %>%
+  mutate(type = "all species")
+b5corr_syn <- b5corr_syn %>%
+  mutate(type = "big 5")
+ndcorr_syn <- ndcorr_syn %>%
+  mutate(type="non-dominant")
+
+syncorr <- rbind(corr_syn, b5corr_syn)
+syncorr_all <- rbind(syncorr, ndcorr_syn) 
+
+## Synchrony and Dominance Correlation Test ----
+syn_dom_mw <- left_join(syn_mw_tx, dominance_mw, by = c("TREATMENT", "timestep", "window_size"))
+
+## create vector of treatments
+trt <- unique(syn_dom_mw$TREATMENT)
+
+## create vector of window size
+wsize <- unique(syn_dom_mw$window_size)
+
+corr_syndom <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficient = NA, p_val = NA) ## create empty dataframe to contain output
+
+
+for (i in 1:length(trt)) {
+  
+  ## select the ith treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- syn_dom_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortst <- cor.test(tempw$mean_dominance, tempw$meanloreau, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+    t <- tempw %>%
+      group_by(TREATMENT) %>%
+      summarise(window_size = mean(window_size)) %>%
+      mutate(corr_coefficient = cortst$estimate, p_val = cortst$p.value)
+     
+    corr_syndom <- rbind(corr_syndom, t)
+    
+  }
+  
+}
+corr_syndom <- corr_syndom[-1,]
+
+## create a variable indicating significance of p-value
+corr_syndom <- corr_syndom %>%
+  mutate(significant = ifelse(p_val < 0.051, "S", 
+                              ifelse(p_val > 0.05 & p_val < 0.07, "M", "NS")))
+
+print(corr_syndom)
+
 ```
 
 # Figure Settings
@@ -675,274 +944,549 @@ colors <- c("#88CCEE", "#CC6677","#DDCC77","#117733","#332288","#AA4499","#44AA9
 theme_set(theme_classic()) #set the theme
 ```
 
-# **Stability Figures**
+# Main Text Figures
 
-## Stability: Mean and Variance
-```{r, fig.width =10, fig.height=4, echo=FALSE, fig.cap='**Figure 1:** Points show the mean stability (A), total cover (B), and temporal variance (C) for each treatment. Bars show one standard error above and below the mean. Treatment abbreviations are as follows: O = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
-
+## Figure 1: Stability, Mean Pin Hits, and Variance
+```{r, fig.width =12, fig.height=4, echo=FALSE}
 #graph the mean variance by treatment
-v <- ggplot(meanvar, aes(x=TREATMENT, y=meanvar)) +
+v <- ggplot(meanstab_mech, aes(x=TREATMENT, y=mean_var)) +
   geom_point(size=3) +
-  geom_errorbar(aes(ymin = meanvar-SEvar, ymax = meanvar+SEvar), width=0.25) +
+  geom_errorbar(aes(ymin = mean_var-SE_var, ymax = mean_var+SE_var), width=0.25) +
   ylab("Temporal Variance") + xlab("Treatment") +
-  annotate("text", x =1, y=17000, label = "a") +
-  annotate("text", x =2, y=15050, label = "ab") +
-  annotate("text", x =3, y=12900, label = "ab") +
-  annotate("text", x =4, y=11600, label = "bc") +
-  annotate("text", x =5, y=9500, label = "c") +
-  annotate("text", x =6, y=8500, label = "c")
+  #annotate("text", x =1, y=23500, label = "a", size = 5) +
+ # annotate("text", x =2, y=19800, label = "ab", size = 5) +
+ # annotate("text", x =3, y=17500, label = "ab", size = 5) +
+#  annotate("text", x =4, y=16000, label = "bc", size = 5) +
+ # annotate("text", x =5, y=12500, label = "c", size = 5) +
+#  annotate("text", x =6, y=11800, label = "c", size = 5) +
+  theme(text = element_text(size = 16)) #change font size
+
 
 #graph the mean total pin hits by treatment
-b <- ggplot(avg_biomass, aes(x=TREATMENT, y=avgbio)) +
+b <- ggplot(meanstab_mech, aes(x=TREATMENT, y=mean_bio)) +
   geom_point(size=3) +
-  geom_errorbar(aes(ymin=avgbio-SEbio, ymax=avgbio+SEbio), width = 0.2) + #include standard error bars
+  geom_errorbar(aes(ymin=mean_bio-SE_bio, ymax=mean_bio+SE_bio), width = 0.2) + #include standard error bars
   ylab("Total Pin Hits") + xlab("Treatment") +
-  annotate("text", x =1, y=1320, label = "a") +
-  annotate("text", x =2, y=1290, label = "a") +
-  annotate("text", x =3, y=1230, label = "a") +
-  annotate("text", x =4, y=1110, label = "b") +
-  annotate("text", x =5, y=1065, label = "b") +
-  annotate("text", x =6, y=1030, label = "b")
+  #annotate("text", x =1, y=1420, label = "a", size = 5) +
+#  annotate("text", x =2, y=1367, label = "ab", size = 5) +
+#  annotate("text", x =3, y=1310, label = "bc", size = 5) +
+#  annotate("text", x =4, y=1210, label = "cd", size = 5) +
+#  annotate("text", x =5, y=1175, label = "d", size = 5) +
+#  annotate("text", x =6, y=1110, label = "d", size = 5) +
+  theme(text = element_text(size = 16)) #change font size
+
 
 ## visualize mean stability & standard error
-s <- ggplot(mean_stability, aes(x=TREATMENT, y=mean_st)) +
+s <- ggplot(meanstab_mech, aes(x=TREATMENT, y=mean_st)) +
   geom_point(size=3) +
-  geom_errorbar(aes(ymin = mean_st-SEst, ymax=mean_st+SEst), width = 0.2) + #add standard error bars
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.2) + #add standard error bars
   ylab("Stability (mean/sd)") + xlab("Treatment") + #label axes
-  annotate("text", x =1, y=5.56, label = "a") +
-  annotate("text", x =2, y=4.56, label = "ab") +
-  annotate("text", x =3, y=4, label = "bc") +
-  annotate("text", x =4, y=4.1, label = "bc") +
-  annotate("text", x =5, y=3.8, label = "bc") +
-  annotate("text", x =6, y=3.5, label = "c")
-  #theme(text = element_text(size = 14)) #change font size
+#  annotate("text", x =1, y=4.75, label = "a", size = 5) +
+#  annotate("text", x =2, y=4.5, label = "ab", size = 5) +
+#  annotate("text", x =3, y=3.9, label = "bc", size = 5) +
+#  annotate("text", x =4, y=3.95, label = "c", size = 5) +
+#  annotate("text", x =5, y=3.3, label = "c", size = 5) +
+ # annotate("text", x =6, y=3.2, label = "c", size = 5) +
+  theme(text = element_text(size = 16)) #change font size
 
 ## plot 3 panel figure of stability, total pin hits, and temporal variance
 ggarrange(s, b, v, 
-          labels = c("A", "B", "C"),
+          labels = "AUTO",
           ncol = 3, nrow = 1, 
           align = "hv")
 ```
 
-## Mean-Variance relationships
-```{r}
-ggplot(meanvar, aes(x=log(meanbio), y= log(meanvar))) +
-  geom_point(size = 3, aes(color= TREATMENT)) +
-  geom_abline() +
-  scale_color_manual(values = green_scale) + #change color scheme
-  coord_cartesian(xlim = c(6.5,7.5), ylim = c(6.5,9.75))
-```
+## Figure 2: Mechanisms
+```{r, echo = FALSE, fig.height=8, fig.width=8}
 
-
-## Total Cover Time Series
-```{r, echo=FALSE, fig.align='center', fig.cap='**Figure 2:** Points represent the mean stability of total cover (temporal mean/temporal standard deviation) for each grazing treatment at each point in time. Treatment abbreviations are as follows: O = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
-
-#graph the time series of total cover 
-ggplot(meantotcov, aes(x=Date_final, y=Mean_TotCov, col=TREATMENT)) + #separate treatments by color
-  geom_line(size = 0.5) +
-  geom_point(aes(y=Mean_TotCov)) +
-  scale_color_manual(values = green_scale) + #change color scheme
-  ylab("Total Cover (# Pin Hits)") + xlab("Date") + labs(col = "Treatment") + #add labels
-  theme(legend.title = element_text(size=12)) + theme(text = element_text(size = 14)) #change font sizes
-
-```
-
-
-
-## Stability Over a Moving Window - Annual Sampling
-```{r, echo=FALSE, fig.width =12, fig.height=8, fig.cap='**Figure 3:** Stability is calculated over a sliding window of lengths 3 years (A), 5 years (B), 7 years (C), and 10 years (D). Points show the mean stability calculated for each time window. Stability was calculated using data from the annual samplings in June only in order to have consistent sampling frequency.'}
-
-ggplot(stab_mw_tx, aes(x=timestep, y=mean_stability, color = TREATMENT)) +
-  geom_line() +
-  geom_point() +
-  scale_color_manual(values = colors) + #change color scheme
-  ylab("Mean Stability") + xlab("Timestep") +
-  facet_wrap(~window_size)
-
-```
-
-
-## All Mechanisms Combined
-```{r, echo=FALSE, fig.width =10, fig.height=10}
-
-syngraz <- ggplot(syn_stab, aes(x=TREATMENT , y=mean_value, shape= Metric_Name)) +
+syngraz <- ggplot(meanstab_mech, aes(x=TREATMENT , y=mean_syn)) +
   geom_point(size=3) +
-  scale_color_manual(values = colors, labels = c("Gross", "Loreau")) +
-  geom_errorbar(aes(ymin = mean_value-SE_value, ymax=mean_value+SE_value), width = 0.3) +
-  ylab("Synchrony") + xlab("Treatment") +  
+  geom_errorbar(aes(ymin = mean_syn-SE_syn, ymax=mean_syn+SE_syn), width = 0.3) +
+  ylab("Synchrony (All)") + xlab("Treatment") +  
   theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
-  labs(col = "Treatment", shape = "Synchrony Metric") +
-    scale_shape_discrete(labels = c("Gross", "Loreau")) +#rename synchrony metrics in legend
-#add legend titles
-  annotate("text", x =1, y=0.125, label = "a") +
-  annotate("text", x =2, y=0.14, label = "ab") +
-  annotate("text", x =3, y=0.205, label = "bc") +
-  annotate("text", x =4, y=0.185, label = ".bc") +
-  annotate("text", x =5, y=0.231, label = "c") +
-  annotate("text", x =6, y=0.24, label = "c") +
-  ## gross synchrony
-  annotate("text", x =1, y=0.055, label = "a") +
-  annotate("text", x =2, y=0.1, label = "ab") +
-  annotate("text", x =3, y=0.11, label = "ab") +
-  annotate("text", x =4, y=0.08, label = "ab") +
-  annotate("text", x =5, y=0.12, label = ".b") +
-  annotate("text", x =6, y=0.14, label = "b")
-  #scale_color_discrete(labels = c("Gross", "Loreau")) #rename synchrony metrics in legend
+  annotate("text", x =1, y=0.17, label = "a") +
+  annotate("text", x =2, y=0.154, label = "a") +
+  annotate("text", x =3, y=0.208, label = "ab") +
+  annotate("text", x =4, y=0.21, label = "ab") +
+  annotate("text", x =5, y=0.271, label = "b") +
+  annotate("text", x =6, y=0.27, label = "b") +
+  coord_cartesian(ylim = c(0.1, 0.4))
 
-synstab <- ggplot(syn_stab, aes(x=mean_value , y=mean_st, col = TREATMENT, shape=Metric_Name)) +
-  stat_smooth(method = "lm", col = "black") +
+synstab <- ggplot(meanstab_mech, aes(x=mean_syn , y=mean_st, col = TREATMENT)) +
+  geom_abline(slope = -10.943, intercept = 5.6823) + #double checked
   geom_point(size=3) +
   scale_color_manual(values = green_scale) +
-  geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst), width = 0.005) + #add standard error bars
-  geom_errorbarh(aes(xmin = mean_value-SE_value, xmax=mean_value+SE_value), height = 0.1) + #add standard error bars
-  ylab("Stability") + xlab("Synchrony") +  #label axes
+  geom_errorbar(aes(ymin=mean_st-SE_st, ymax=mean_st+SE_st), width = 0.005) + #add standard error bars
+  geom_errorbarh(aes(xmin = mean_syn-SE_syn, xmax=mean_syn+SE_syn), height = 0.1) + #add standard error bars
+  ylab("Stability") + xlab("Synchrony (All)") +  #label axes
+  theme(legend.title = element_text(size=12)) + theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Treatment") +
+    coord_cartesian(xlim = c(0.1, 0.4))
+
+
+big5syngraz <- ggplot(big5meanstab_mech, aes(x=TREATMENT , y=mean_syn)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_syn-SE_syn, ymax=mean_syn+SE_syn), width = 0.3) +
+  ylab("Synchrony (Big 5)") + 
+  xlab("Treatment") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
+  #scale_shape_discrete(labels = c("Gross", "Loreau")) +
+  annotate("text", x =1, y=0.3, label = "a") +
+  annotate("text", x =2, y=0.28, label = "a") +
+  annotate("text", x =3, y=0.33, label = "a") +
+  annotate("text", x =4, y=0.31, label = "a") +
+  annotate("text", x =5, y=0.31, label = "b") +
+  annotate("text", x =6, y=0.31, label = "b") +
+  coord_cartesian(ylim = c(0.1, 0.4))
+
+
+big5synstab <- ggplot(big5meanstab_mech, aes(x=mean_syn , y=mean_st, col = TREATMENT)) +
+  geom_point(size=3) +
+  scale_color_manual(values = green_scale) +
+  geom_errorbar(aes(ymin=mean_st-SE_st, ymax=mean_st+SE_st), width = 0.005) + #add standard error bars
+  geom_errorbarh(aes(xmin = mean_syn-SE_syn, xmax=mean_syn+SE_syn), height = 0.1) + #add standard error bars
+  ylab("Stability") + xlab("Synchrony (Big 5)") +  #label axes
   theme(legend.title = element_text(size=12)) + theme(text = element_text(size = 14)) + #change font sizes
   labs(col = "Treatment", shape = "Synchrony Metric") +
   scale_shape_discrete(labels = c("Gross", "Loreau")) +
-  annotate("text", x =0.15, y=6.25, label = "Loreau: y = -13.1211x + 6.1034") +
-  annotate("text", x =0.15, y=6, label = "R2 = 0.7702, p-value = 1.05x10^-6") +
-  annotate("text", x =0.15, y=5.75, label = "Gross: y = -13.6138x + 5.0258") +
-  annotate("text", x =0.15, y=5.5, label = "R2 = 0.3176 , p-value = 0.00875")
+  geom_abline(slope = -5.8979, intercept = 5.1794) + #double checked
+  coord_cartesian(xlim = c(0.1, 0.4))
 
-domgraz <- ggplot(avg_BPdom, aes(x=TREATMENT, y=avg_dom)) +
-  geom_point(size = 3) +
-  geom_errorbar(aes(ymin=avg_dom-SE, ymax=avg_dom+SE), width = 0.25) +
-  xlab("Treatment") + ylab("Berger-Parker Dominance") +  
-  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #+ #change font sizes
-  annotate("text", x =2, y=0.29, label = "No significant effects")
 
-domstab <- ggplot(dom_stab, aes(x=avg_dom, y=mean_st, col=TREATMENT)) +
-  stat_smooth(method = "lm", col = "black") +
+domgraz <- ggplot(meanstab_mech, aes(x=TREATMENT, y=mean_dom)) +
   geom_point(size = 3) +
-  ylab("Stability") + xlab("Berger-Parker Dominance") +
-  geom_errorbarh(aes(xmin=avg_dom-SE, xmax=avg_dom+SE)) +
-  geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst)) +
+  geom_errorbar(aes(ymin=mean_dom-SE_dom, ymax=mean_dom+SE_dom), width = 0.25) +
+  xlab("Treatment") + ylab("Dominance") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
+  annotate("text", x =1, y=0.43, label = "a") +
+  annotate("text", x =2, y=0.425, label = "a") +
+  annotate("text", x =3, y=0.405, label = "ab") +
+  annotate("text", x =4, y=0.405, label = "ab") +
+  annotate("text", x =5, y=0.335, label = "b") +
+  annotate("text", x =6, y=0.356, label = "ab") +
+  coord_cartesian(ylim = c(0.3,0.45))
+
+
+domstab <- ggplot(meanstab_mech, aes(x=mean_dom, y=mean_st, col=TREATMENT)) +
+  geom_point(size = 3) +
+  ylab("Stability") + xlab("Dominance") +
+  geom_errorbarh(aes(xmin=mean_dom-SE_dom, xmax=mean_dom+SE_dom)) +
+  geom_errorbar(aes(ymin=mean_st-SE_st, ymax=mean_st+SE_st)) +
   scale_color_manual(values = green_scale) +
   theme(legend.title = element_text(size=12)) +
   theme(text = element_text(size = 14)) +
-  labs(col = "Treatment") + #change legend title
-  annotate("text", x =0.31, y=6, label = "y = 8.752x + 1.029") +
-  annotate("text", x =0.31, y=5.65, label = "R2 = 0.1431, p-value = 0.0678")
+  labs(col = "Treatment") +
+  geom_abline(intercept = 0.4003, slope = 8.9449) +
+  coord_cartesian(xlim = c(0.3,0.45))
 
-rich1 <- ggplot(richstab, aes(x=TREATMENT, y=meanSR_tx)) +
-  geom_point(size=3) +
-  geom_errorbar(aes(ymin=meanSR_tx-SESR_tx, ymax=meanSR_tx+SESR_tx), width=0.25) +
-  ylab("Species Richness") +xlab("Treatment") +
-  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
-  annotate("text", x =2, y=18.5, label = "No significant effects")
 
-richstability <- ggplot(richstab, aes(x=meanSR_tx, y=mean_st, color=TREATMENT)) +
-  stat_smooth(method = "lm", col = "black") +
-  geom_point(size=3) +
-  geom_errorbarh(aes(xmin=meanSR_tx-SESR_tx, xmax=meanSR_tx+SESR_tx)) +
-  geom_errorbar(aes(ymin=mean_st-SEst, ymax=mean_st+SEst), width=0.15) +
-  scale_color_manual(values = green_scale) +
-  ylab("Mean Stability") +xlab("Species Richness") +
-  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
-  annotate("text", x =20, y=6, label = "y = -0.1836x + 7.5922") +
-  annotate("text", x =20, y=5.7, label = "R2 = 0.00215, p-value = 0.3238")
-
-ggarrange(syngraz, synstab, domgraz, domstab, rich1, richstability,
-          #labels = c("A", "B", "C", "D", "E"),
+ggarrange(syngraz, synstab,
+          big5syngraz, big5synstab, 
+          domgraz, domstab, 
           ncol = 2, nrow = 3,
-          #align = "hv", 
+          align = "hv", 
           common.legend = TRUE, 
-          labels = c("A", "B", "C", "D", "E", "F"), 
-          #vjust = -0.25,
+          labels = "AUTO", 
           legend = "bottom")
-
 ```
 
+## Figure 4: Correlations
+```{r, fig.height=5, fig.width=10, echo=FALSE}
+## Dominance Correlations
+mw7stab_dom_mw <- stab_dom_mw %>%
+  filter(window_size == "7")
 
-## Synchrony over a moving window
+mw7synstabfig <- stab_syn_mw %>%
+  filter(window_size == 7)
 
-```{r, echo=FALSE, fig.width =12, fig.height=6, fig.cap='**Figure 6:** Loreau synchrony calculated using a moving window of 5 years (A), 7 years (B), and 10 years (C).'}
+corrsynstab <- ggplot(mw7synstabfig, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+    geom_point() +
+    ylab("Stability") + xlab("Synchrony") +
+    facet_wrap(~TREATMENT, ncol = 6) +
+    theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
 
-ggplot(syn_mw_tx, aes(x=timestep, y=meanloreau, color = TREATMENT)) +
-  geom_line() +
+corrdomstab <- ggplot(mw7stab_dom_mw, aes(x=mean_dominance, y=mean_stability, color = timestep)) +
   geom_point() +
-  scale_color_manual(values = colors) + #change color scheme
-  ylab("Mean Loreau Synchrony") + xlab("Timestep") +
-  facet_wrap(~window_size)
+  ylab("Stability") + xlab("Dominance") +
+  facet_wrap(~TREATMENT, ncol = 6) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) +
+  coord_cartesian(xlim = c(0.3, 0.45))
 
+
+ggarrange(corrsynstab, corrdomstab, 
+          common.legend = TRUE, 
+          ncol = 1, 
+          legend = "right", 
+          labels = "AUTO")
+```
+
+## Figure 5: Correlation Coefficients
+```{r, echo = FALSE, fig.width=9, fig.height=6}
+syncoeff <- ggplot(syncorr_all, aes(x=TREATMENT, y=corr_coefficientl, color = type, shape = significant)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  ylab("Synchrony and Stability") + xlab("") +
+  scale_color_manual(values = c("#E58606", "#5D69B1", "#52BCA3")) +
+  labs(col = "Type", shape = "Significance") +
+  scale_shape_manual(values = c(10,1,16)) +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+
+corr_dom$TREATMENT <- as.factor(corr_dom$TREATMENT) #change treatment to factor
+corr_dom$TREATMENT <- factor(corr_dom$TREATMENT, levels = c("O", "W", "MW", "C", "WC", "MWC"))
+
+domcoeff <- ggplot(corr_dom, aes(x=TREATMENT, y=corr_coefficient, shape = significant)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  ylab("Dominance and Stability") + xlab("Treatment") +
+  scale_color_manual(values = c("#ED645A","#CC3A8E","#A5AA99")) +
+  labs(shape = "Significance") +
+  scale_shape_manual(values = c(1,16)) +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) +
+  theme(legend.position = "none")
+#E58606,#5D69B1,#52BCA3,#99C945,#CC61B0,#24796C,#DAA51B,#2F8AC4,#764E9F,#ED645A,#CC3A8E,#A5AA99
+
+
+ggarrange(syncoeff,
+          domcoeff, 
+          ncol = 1, nrow = 2, 
+          align = "hv", 
+          common.legend = TRUE, 
+          legend = "right")
 ```
 
 
-## Dominance over time
-```{r, echo=FALSE, fig.align='center', fig.cap='**Figure 8:** Lines show the mean Berger-Parker dominance across time for each grazing treatment. Treatment abbreviations are as follows: 0 = No herbivores, W = Wild mesoherbivores, MW = Megaherbivores and wild mesoherbivores, C = cattle, MWC = Megaherbivores, wild mesoherbivores, and cattle, WC = Wild mesoherbivores and cattle'}
-## Graph dominance over time
-ggplot(BP_dom, aes(x=Date_final, y=mean_dom, col=TREATMENT)) +
+# Supplementary Figures
+
+## Figure S1: Rank Abundance Curve to support using the 'big 5' species
+```{r, echo=FALSE, fig.width=15, fig.height=10}
+rankabund <- klee_annual %>%
+  group_by(TREATMENT, SPECIES) %>% #group by treatment and species
+  summarise(abundance = mean(Pin_Hits)) %>%
+  mutate(rank = rank(-abundance, na.last = NA, ties.method = "average")) #%>% 
+
+ggplot(rankabund, aes(x=abundance, y=rank)) +
+  geom_line() +
+  geom_point(size = 2) +
+  facet_wrap(~TREATMENT) +
+  scale_y_reverse() +
+  scale_x_reverse() +
+  xlab("Abundance") + ylab("Rank") +
+ # geom_text(aes(label = ifelse(rank<6, as.character(SPECIES), ''),hjust=0, vjust=10))
+  geom_text_repel(aes(label=ifelse(rank<6, as.character(SPECIES), ''),hjust=0, vjust=0),
+                  point.padding = 1,
+                  xlim = c(-450, NA), 
+                  ylim = c(-20, NA)) +
+  theme(text = element_text(size = 20))
+
+
+```
+
+## Figure S2: Total Cover Time Series
+```{r, echo=FALSE, fig.align='center'}
+tcovtime <- totcov %>%
+  group_by(TREATMENT, Date_final) %>%
+  summarise(totcov = mean(totcov))
+
+#graph the time series of total cover 
+ggplot(tcovtime, aes(x=Date_final, y=totcov, col=TREATMENT)) + #separate treatments by color
   geom_line(size = 0.5) +
-  theme_bw() +
-  #scale_color_brewer(palette = "Dark2") +
+  scale_color_manual(values = green_scale) + #change color scheme
+  ylab("Total Cover (# Pin Hits)") + xlab("Date") + labs(col = "Treatment") + #add labels
+  theme(legend.title = element_text(size=12)) + theme(text = element_text(size = 14)) #change font sizes
+```
+
+## Figure S3: Dominance over time
+```{r, echo=FALSE, fig.align='center', fig.height=4, fig.width=6}
+## Graph dominance over time
+ggplot(meanann_BPdom, aes(x=Date_final, y=mean_dom, col=TREATMENT)) +
+  geom_line(size = 0.5) +
   ylab("Berger-Parker Dominance") + xlab("Date") +
   scale_color_manual(values = green_scale) +
   theme(legend.title = element_text(size=12)) +
   theme(text = element_text(size = 14)) +
   labs(col = "Treatment") #change legend title
-
 ```
 
-## Dominance over a moving window
+## Figure S4: Mean-Variance relationships
 ```{r, echo=FALSE}
+ggplot(meanvar, aes(x=log(meanbio), y= log(meanvar))) +
+  geom_point(size = 3, aes(color= TREATMENT)) +
+  geom_abline() +
+  scale_color_manual(values = green_scale) + #change color scheme
+  coord_cartesian(xlim = c(6.5,7.5), ylim = c(6.5,10)) +
+  ylab("Mean Variance (Log)") + xlab("Mean Biomass (Log)") +
+    theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) #change font sizes
+```
 
-ggplot(dominance_mw, aes(x=timestep, y=mean_dominance, color = TREATMENT)) +
+## Figure S5: Richness-Stability Figure
+```{r, echo=FALSE, fig.height=4, fig.width=8}
+## Richness by Grazing Treatment
+richgraz <- ggplot(meanstab_mech, aes(x=TREATMENT, y=mean_rich)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin=mean_rich-SE_rich, ymax=mean_rich+SE_rich), width=0.25) +
+  ylab("Species Richness") +xlab("Treatment") +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) #change font sizes
+
+## Richness and Stability
+richstab <- ggplot(meanstab_mech, aes(x=mean_rich, y=mean_st, color=TREATMENT)) +
+  geom_point(size=3) +
+  geom_errorbarh(aes(xmin=mean_rich-SE_rich, xmax=mean_rich+SE_rich)) +
+  geom_errorbar(aes(ymin=mean_st-SE_st, ymax=mean_st+SE_st), width=0.15) +
+  scale_color_manual(values = green_scale) +
+  ylab("Stability") +xlab("Species Richness") +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) #+ #change font sizes
+
+## Big 5 Richness and Stability
+b5richstab <- ggplot(big5meanstab_mech, aes(x=mean_rich, y=mean_st, color = TREATMENT)) +
+  #geom_abline(slope = -2.250, intercept = 14.754) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin=mean_st-SE_st, ymax=mean_st+SE_st))+
+  xlab("Big 5 Species Richness") + ylab("Stability") +
+  scale_color_manual(values = green_scale) +
+  geom_errorbarh(aes(xmin=mean_rich-SE_rich, xmax=mean_rich+SE_rich)) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) #+ #change font sizes
+
+## Plot all together
+ggarrange(richgraz, richstab, b5richstab,
+          ncol = 3, nrow = 1,
+          align = "hv", 
+          common.legend = TRUE, 
+          labels = "AUTO", 
+          legend = "bottom")
+```
+
+## Figure S6: Non-Dominant Species Mechanism
+```{r, echo=FALSE}
+nondomsyngraz <- ggplot(nondommeanstab_mech, aes(x=TREATMENT , y=mean_syn)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_syn-SE_syn, ymax=mean_syn+SE_syn), width = 0.3) +
+  ylab("Non-Dominant Synchrony") + 
+  xlab("Treatment") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14))# + #change font sizes
+
+nondomsynstab <- ggplot(nondommeanstab_mech, aes(x=mean_syn , y=mean_st, col = TREATMENT)) +
+  geom_point(size=3) +
+  scale_color_manual(values = green_scale) +
+  geom_errorbar(aes(ymin=mean_st-SE_st, ymax=mean_st+SE_st), width = 0.005) + #add standard error bars
+  geom_errorbarh(aes(xmin = mean_syn-SE_syn, xmax=mean_syn+SE_syn), height = 0.1) + #add standard error bars
+  ylab("Stability") + xlab("Non-Dominant Synchrony") +  #label axes
+  theme(legend.title = element_text(size=12)) + theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Treatment") 
+
+ggarrange(nondomsyngraz, nondomsynstab,
+          ncol = 2, nrow = 1,
+          align = "hv", 
+          common.legend = TRUE, 
+          labels = "AUTO", 
+          legend = "bottom")
+```
+
+## Figure S7: Moving Window Mechanisms
+```{r, echo=FALSE, fig.height=9, fig.width=11}
+
+mwstab<-ggplot(stab_mw_tx, aes(x=timestep, y=mean_stability, color = TREATMENT)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = colors) + #change color scheme
+  ylab("Mean Stability (All)") + xlab("Timestep") +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+mwsyn <- ggplot(syn_mw_tx, aes(x=timestep, y=meanloreau, color = TREATMENT)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = colors) + #change color scheme
+  ylab("Mean Loreau Synchrony (All)") + xlab("Timestep") +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+mwdom <- ggplot(dominance_mw, aes(x=timestep, y=mean_dominance, color = TREATMENT)) +
   geom_line() +
   geom_point() +
   scale_color_manual(values = colors) + #change color scheme
   ylab("Mean Berger-Parker Dominance") + xlab("Timestep") +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+ggarrange(mwstab, mwsyn, mwdom,
+          ncol = 1, nrow = 3,
+          #align = "hv", 
+          common.legend = TRUE, 
+          #labels = c("A", "B", "C", "D", "E", "F"), 
+          legend = "bottom")
+```
+
+
+## Figure S8: Synchrony over a moving window (Big 5 & Non Dom)
+```{r, echo=FALSE, fig.width =8, fig.height=4}
+
+ggplot(big5syn_mw_tx, aes(x=timestep, y=meanloreau, color = TREATMENT)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = colors) + #change color scheme
+  ylab("Mean Loreau Synchrony (Big 5)") + xlab("Timestep") +
+  facet_wrap(~window_size)
+
+
+ggplot(nondomsyn_mw_tx, aes(x=timestep, y=meanloreau, color = TREATMENT)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = colors) + #change color scheme
+  ylab("Mean Loreau Synchrony (Non-Dom)") + xlab("Timestep") +
   facet_wrap(~window_size)
 
 ```
 
-## Dominant species over time
-```{r, echo=FALSE, fig.width =14, fig.height=8, fig.cap='**Figure 10:** Points show the mean pin hits for each species at a point in time. Included species were in the top 2 most abundant species in a given treatment at some point in the time series.'}
-domsp <- domsp[-1031,]
-domsp$TREATMENT <- as.factor(domsp$TREATMENT) #change treatment to factor
-domsp$TREATMENT <- factor(domsp$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
-
-ggplot(domsp, aes(x=Date_final, y=mean, color=SPECIES)) +
-  geom_line() +
-  geom_point() +
-  facet_wrap(~TREATMENT) +
-  scale_color_manual(values = colors) +
-  xlab("Date") + ylab("Mean Pin Hits")
-
-```
-
-## Dominant Species, Rank, & Stability
-```{r, echo=FALSE, fig.width =12, fig.height=6, fig.cap='**Figure 11:** Species stability (mean/sd) for species that were in the top 2 most abundant species in a given treatment at any point in the time series. Bars indicate one standard error above and below the mean. The mean rank of a species was obtained by ranking their abundance in a treatment and taking the mean rank of each species across the time series. '}
-
-dominant.sp <- dominant.sp[-40,]
-dominant.sp$TREATMENT <- as.factor(dominant.sp$TREATMENT) #change treatment to factor
-dominant.sp$TREATMENT <- factor(dominant.sp$TREATMENT, levels = c("0", "W",  "MW",  "C", "MWC", "WC"))
 
 
-ggplot(dominant.sp, aes(x=rank, y=stability, col=SPECIES)) +
-  geom_point(size=2) +
-  ylab("Species Stability") + xlab("Species Mean Rank over Time") +
-  #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-  scale_color_manual(values = colors) +
-  geom_errorbar(aes(ymin=stability-SE, ymax=stability+SE), width=0.75) +
-  #theme(legend.title = element_text(size=12)) +
-  #theme(text = element_text(size = 14)) +
-  labs(col = "Species") + #change legend title
-  facet_wrap(~TREATMENT) 
-```
-
-
-## Richness over time
+## Figure S9: Richness over time
 ```{r, echo=FALSE, fig.cap='**Figure 14:** Mean richness over time.'}
-
-ggplot(rich_time, aes(x=Date_final, y=meanrich, color = TREATMENT)) +
+## All species richness over time
+ggplot(meanannrich, aes(x=Date_final, y=meanrich, color = TREATMENT)) +
   geom_line(size = 0.5) +
   geom_point() +
   theme_bw() +
-  #scale_color_brewer(palette = "Dark2") +
   ylab("Richness") + xlab("Date") +
   scale_color_manual(values = green_scale) +
   theme(legend.title = element_text(size=12)) +
   theme(text = element_text(size = 14)) +
   labs(col = "Treatment") #change legend title
 
+## Big 5 species richness over time
+ggplot(big5meanannrich, aes(x=Date_final, y=meanrich, color = TREATMENT)) +
+  geom_line(size = 0.5) +
+  geom_point() +
+  ylab("Richness") + xlab("Date") +
+  scale_color_manual(values = green_scale) +
+  theme(legend.title = element_text(size=12)) +
+  theme(text = element_text(size = 14)) +
+  labs(col = "Treatment") + #change legend title
+  facet_wrap(~TREATMENT)
+
+## Non-dominant species richness over time
+ggplot(nondommeanannrich, aes(x=Date_final, y=meanrich, color = TREATMENT)) +
+  geom_line(size = 0.5) +
+  geom_point() +
+  theme_bw() +
+  ylab("Richness") + xlab("Date") +
+  scale_color_manual(values = green_scale) +
+  theme(legend.title = element_text(size=12)) +
+  theme(text = element_text(size = 14)) +
+  labs(col = "Treatment") #change legend title
 ```
+
+## Figure S10: Synchrony-Stability Correlations Final Figs
+```{r, fig.height=8, fig.width=8, echo=FALSE}
+mw7synstabfig <- stab_syn_mw %>%
+  filter(window_size == 7)
+
+corrsynL <- ggplot(mw7synstabfig, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+    geom_point() +
+    ylab("Stability") + xlab("Loreau Synchrony: All species") +
+    facet_wrap(~TREATMENT, ncol = 6) +
+    theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+mw7big5synstabfig <- big5stab_syn_mw %>%
+  filter(window_size == 7)
+
+b5corrsynL <- ggplot(mw7big5synstabfig, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+    geom_point() +
+    ylab("Stability") + xlab("Loreau Synchrony: Big 5 species") +
+    facet_wrap(~TREATMENT, ncol = 6) +
+    theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+
+mw7nondomsynstabfig <- nondomstab_syn_mw %>%
+  filter(window_size == 7)
+
+ndcorrsynL <- ggplot(mw7nondomsynstabfig, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+    geom_point() +
+    ylab("Stability") + xlab("Loreau Synchrony: Non-dominant species") +
+    facet_wrap(~TREATMENT, ncol = 6) +
+    theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+
+ggarrange(corrsynL, b5corrsynL, ndcorrsynL,
+          ncol = 1, nrow = 3, align = "hv", 
+          common.legend = TRUE, 
+          labels = "AUTO",
+          legend = "bottom"
+          )
+```
+
+# Currently Unused Figures
+## Correlation Figures
+```{r, echo=FALSE}
+## Loreau Synchrony correlations
+ggplot(stab_syn_mw, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+  geom_point() +
+  ylab("Stability") + xlab("Loreau Synchrony") +
+  facet_wrap(~window_size*TREATMENT, ncol = 6)
+
+
+ggplot(mw7synstabfig, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+    geom_point() +
+    ylab("Stability") + xlab("Loreau Synchrony") +
+    facet_wrap(~TREATMENT, ncol = 3)
+
+
+ggplot(big5stab_syn_mw, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+  geom_point() +
+  ylab("Stability") + xlab("Loreau Synchrony") +
+  facet_wrap(~window_size*TREATMENT, ncol = 6)
+
+ggplot(nondomstab_syn_mw, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+  geom_point() +
+  ylab("Stability") + xlab("Loreau Synchrony") +
+  facet_wrap(~window_size*TREATMENT, ncol = 6)
+
+## Dominance Correlations
+ggplot(stab_dom_mw, aes(x=mean_dominance, y=mean_stability, color = timestep)) +
+  geom_point() +
+  ylab("Stability") + xlab("Dominance") +
+  facet_wrap(~~window_size*TREATMENT, ncol = 6)
+
+
+
+## Dominance and Synchrony Correlations
+ggplot(syn_dom_mw, aes(x= mean_dominance, y=meanloreau, color = timestep)) +
+  geom_point() +
+  ylab("Synchrony") + xlab("Dominance") +
+  facet_wrap(~~window_size*TREATMENT, ncol = 6) +
+  ggtitle("Synchrony and Dominance Correlations")
+```
+
+
+
+## Variability in Mechanisms - Exploration
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+dom <- ggplot(meanstab_mech, aes(x=TREATMENT, y=mean_vardom)) +
+  geom_point(size = 3) +
+  ylab("Variance of BP Dominance through Time") + xlab("")
+
+
+rich <- ggplot(meanstab_mech, aes(x=TREATMENT, y=mean_varrich)) +
+  geom_point(size = 3) +
+  ylab("Variance of Richness through Time") + xlab("")
+
+ggarrange(dom, rich, ncol = 2, align = "hv")
+```
+
+## Big 5 Species Over Time 
+```{r, echo = FALSE, fig.width=8, fig.height=4}
+## take the mean biomass of big 5 species in each treatment
+big5time <- big5annual %>%
+  group_by(TREATMENT, SPECIES, Date_final) %>%
+  summarise(meanbio = mean(Pin_Hits))
+
+ggplot(big5time, aes(x=Date_final, y=meanbio, color = SPECIES)) +
+  geom_line(size = 0.8) +
+  facet_wrap(~TREATMENT) +
+  ylab("Mean Cover") + xlab("Date") +
+  scale_color_manual(values = colors)
+```
+
+

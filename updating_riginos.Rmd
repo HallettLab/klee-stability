@@ -1,0 +1,342 @@
+---
+title: "Updating Riginos Analysis"
+author: "Carmen Ebel"
+date: "7/6/2021"
+output: html_document
+---
+
+## Load Data
+```{r setup, echo=FALSE}
+setwd("~/Repositories/klee-stability")
+
+## Load packages
+library(tidyverse)
+library(vegan)
+library(forcats)
+library(lubridate)
+library(codyn)
+library(ggpubr)
+library(segmented)
+
+## source cleaned data
+source("klee_allyears_cleaning.R")
+source("precipitation_data_cleaning.R")
+
+
+## Calculate Total Cover
+totcov_all <- klee_long %>%
+  group_by(BLOCK, TREATMENT, Unique_ID, Date_final) %>% #group by block, treatment, and date 
+  summarise(totcov = sum(Pin_Hits, na.rm=T)) #sum abundances to calculate tot cover
+
+
+klee_annual <- klee_annual %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+klee_annual$Date_numeric <- as.numeric(klee_annual$Date_numeric)
+
+klee_long <- klee_long %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+klee_long$Date_numeric <- as.numeric(klee_long$Date_numeric)
+
+rm(list = c("avg_biomass", "big5annual", "nondom", "treats"))
+```
+
+## Need the Relative Cover of Each species
+```{r, echo=FALSE}
+## Calculate the Relative Cover of each species for each plot at each time point
+klee_rel_all <- left_join(klee_long, totcov_all, by = c("Unique_ID", "Date_final", "BLOCK", "TREATMENT")) %>%
+  group_by(TREATMENT, Unique_ID, Date_final, SPECIES) %>%
+  mutate(relcov = Pin_Hits/totcov) %>%
+  select(!totcov) #%>%
+  #ungroup()
+```
+
+# Figure Settings
+```{r, echo=FALSE, include=FALSE}
+green_scale <- c("#97e196", "#6cc08b", "#4c9b82", "#217a79", "#105965", "#074050") #make a vector of colors
+colors <- c("#88CCEE", "#CC6677","#DDCC77","#117733","#332288","#AA4499","#44AA99","#999933","#882255","#661100","#6699CC","#888888")
+theme_set(theme_classic()) #set the theme
+```
+
+# Principal Response Curve Analysis
+## PRC/RDA Analysis w/all sampling points (bi-annual for first part of time series) (RELATIVE COVER)
+### Create Reference Treatment
+```{r, echo = FALSE}
+## Create Reference Treatment values using Jan 1999 data averaged across all treatments and plots - one average value per block 
+date <- as.factor(unique(klee_rel_all$Date_final)) ## make vector of dates 
+
+refyear_all <- data.frame(BLOCK = NA, SPECIES = NA, relcov = NA, Pin_Hits = NA, TREATMENT = NA, Unique_ID = NA, Date_final = NA, Date_numeric = NA) ## create empty data frame
+
+## calculate the reference year values in a for-loop so that it populates the same set of reference values for all dates in the time series
+for (i in 1:length(date)) {
+  
+  temp <- klee_rel_all %>%
+    #ungroup() %>%
+    filter(Date_final == "1999-06-01") %>% #filter to reference date
+    group_by(BLOCK, SPECIES) %>% #group by block and species to calc avg conditions in each block
+    summarize(relcov = mean(relcov), Pin_Hits = mean(Pin_Hits)) %>% # take the mean cover of each sp in each block
+    mutate(TREATMENT = "REF", Unique_ID = "REF", Date_final = date[i], Date_numeric = paste(year(Date_final), month(Date_final), day(Date_final), sep = "0")) # add values for treatment, unique ID, etc.
+  
+  refyear_all <- rbind(refyear_all, temp) #add to the reference year dataframe
+  
+}
+
+refyear_all <- refyear_all[-1,] #%>% #remove row of NAs
+  #mutate(Date_final = ymd(Date_numeric))
+
+## Get the data frames ready to combine... 
+klee_rel_all$Date_numeric <- as.numeric(klee_rel_all$Date_numeric)
+refyear_all$Date_numeric <- as.numeric(refyear_all$Date_numeric)
+klee_rel_all$Date_final <- as.Date.factor(klee_rel_all$Date_final)
+refyear_all$Date_final <- as.Date.factor(refyear_all$Date_final)
+klee_rel_all$TREATMENT <- as.factor(klee_rel_all$TREATMENT)
+refyear_all$TREATMENT <- as.factor(refyear_all$TREATMENT)
+```
+
+### PRC with 1999-2020 Data
+```{r}
+#1 add reference point as a new sampling point to species data
+relcovprc_all_bi <- rbind(klee_rel_all, refyear_all) %>%
+  pivot_wider(names_from = "SPECIES", values_from = "relcov") %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "REF", "O", "W", "MW", "C", "WC", "MWC"))
+## important that REF is ordered first so that it becomes the comparison
+
+relcovprc_all_bi[is.na(relcovprc_all_bi)] <- 0 ## replace NA values with 0
+
+## create vectors of the year and treatment
+year_all <- as.factor(relcovprc_all_bi$Date_numeric)
+TRT_all <- as.factor(relcovprc_all_bi$TREATMENT)
+
+## remove the non-species columns
+sp_only_all_bi <- relcovprc_all_bi %>%
+  ungroup() %>%
+  select(!(1:6))
+
+## Principal Response Curve Analysis
+prc_relcov_all_bi <- prc(response = sp_only_all_bi, treatment = TRT_all, time = year_all)
+
+prc_relcov_all_bi ## RDA
+summary(prc_relcov_all_bi) ## PRC
+
+```
+
+## Testing & Extracting Results
+
+## One way to visualize the PRC
+plot(prc_relcov_all_bi)
+
+abundance <- colSums(sp_only_all_bi) ## add up (by column) the abundances of the original matrix
+plot(prc_relcov_all_bi, select = abundance > 5) # the 5 indicates that only species with >5 total abundance are plotted 
+#The species weights are the correlation with the treatment effects.
+#The higher the (abs value) weight, the more the
+#actual response pattern of the species is likely to follow the
+#pattern in the PRC.
+
+
+prc_relcov_all_bi #prc is special case of model: rda(response~treatment*time+Condition(time))
+## conditional explains 0.89 % of the variation
+## treatment and its interaction with time (constrained) explains 1.08% of the variation
+
+
+
+prc_relcov_all_bi$CCA$eig/sum(prc_relcov_all_bi$CCA$eig)
+## first axis explains 64.64% of variance
+## second axis explains 14.33% of variance
+
+
+
+anova(prc_relcov_all_bi) ## overall model significance (uses vegan's anova.cca function)
+anova(prc_relcov_all_bi, strata = Date_final, first = TRUE, perm.max = 9999)
+anova(prc_relcov_all_bi, by = "terms", permu = 100) ## treatment significance and interaction significance
+
+
+
+## monte carlo permutation test for treatment differences within time periods; sequential
+Ftests<-NULL
+for (i in levels(month )){
+  timeper<-kv8[month ==i,]
+  trt<-treatment[month ==i]
+  Ftests [[i]] <- anova(rda(timeper ~ trt), by = "terms", step =1000)
+}
+
+Ftests
+sapply (Ftests, function(x) x[1,5])#extracts pvalues for each date.
+
+#month effects within treatment
+Ftests2<-NULL
+for (i in levels(treatment )){
+  trt2<-kv8[treatment==i,]
+  timeper2<-month[treatment ==i]
+  Ftests2 [[i]] <- anova(rda(trt2 ~ timeper2), by = "terms", step =1000)
+}
+
+Ftests2
+sapply (Ftests2, function(x) x[1,5])
+
+
+# loop through time, compute PCA, extract scores and do Dunnett-Test
+for (i in levels(week)) {
+  # PCA
+  take_spec <- pyrifos[week == i, ]
+  pca <- rda(take_spec)
+  # scores of first principal component
+  pca_scores <- scores(pca, display = "sites", choices = 1, scaling = 1)
+  mod_aov <- aov(pca_scores ~ dose, data = df[week == i, ])
+  out[[i]] <- summary(glht(mod_aov,
+                                 alternative = "t",
+                                 linfct = mcp(dose = "Dunnett")))
+}
+
+
+## extract scores
+prc_scores <- scores(prc_relcov_all_bi, c(1:10), scaling = 3) 
+
+site_scores <- data.frame(sites = prc_scores$sites)
+
+
+```{r}
+prcsum_relcov_all_bi <- summary(prc_relcov_all_bi, scaling = 1) ## save the summary of the PRC analysis
+
+prcsum_relcov_all_bi
+
+prc_relresults_all_bi <- data.frame(coeff = prcsum_relcov_all_bi$coefficients) %>% ## add the coefficients to a dataframe
+  rownames_to_column("TREATMENT") %>%
+  pivot_longer(cols = 2:35, names_to = "year", values_to = "coeff") %>%
+  mutate(Date_numeric = str_remove(year, "coeff."), Date_final = ymd(Date_numeric)) %>%
+  select(!year) %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #%>%
+  #mutate(coeff = coeff*(-1))
+
+prc_relresults_all_bi$TREATMENT <- as.factor(prc_relresults_all_bi$TREATMENT)
+
+## plot coefficients over time
+ggplot(prc_relresults_all_bi, aes(x=Date_final, y=coeff, color = TREATMENT)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = green_scale) +
+  xlab("Date") + ylab("PRC Coefficient")
+```
+
+## Breakpoint Analysis of PRC Results
+```{r}
+
+
+
+
+
+```
+
+
+## Visualize the PRC Results
+```{r, echo = FALSE, fig.height=4, fig.width=10}
+
+dry <- pptcondition %>%
+  filter(condition == "dry")
+print(dry)
+
+wet <- pptcondition %>%
+  filter(condition == "wet")
+
+## plot coefficients over time
+ggplot() +
+  geom_line(data = prc_relresults_all_bi, mapping = aes(x=Date_final, y=coeff, color = TREATMENT)) +
+  geom_point(data = prc_relresults_all_bi, mapping = aes(x=Date_final, y=coeff, color = TREATMENT), size = 3.5) +
+  scale_color_manual(values = green_scale) +
+  xlab("Date") + ylab("PRC Coefficient") +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 15)) + #change font sizes
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(data = dry, mapping = aes(xintercept = Date_final), linetype = "dotted")
+
+```
+
+
+## Classifying Precipitation Events
+
+## DEFINING DRY AND WET PERIODS ##
+## from Riginos 2018: Drought = rainfall in the bottom 25th percentile of all sample periods; less than 120 mm in the four-month rainy season preceding sampling
+
+## need total rainfall in each month? have the average of the three blocks, 
+## so if I add the averages of the last four months that should give the correct definition of drought
+
+## need to sum precipitation 
+## September PPT
+sepdec <- ppt99_20 %>%
+  filter(Date_final %like% "-09" | Date_final %like% "-10" | Date_final %like% "-11" | Date_final %like% "-12") %>%
+  group_by(Year) %>%
+  summarize(mo4ppt = sum(Average)) %>%
+  mutate(season = "sepdec")
+
+
+## February to May
+febmay <- ppt99_20 %>%
+  filter(Date_final %like% "-02"| Date_final %like% "-03" | Date_final %like% "-04" | Date_final %like% "-05") %>%
+  group_by(Year) %>%
+  summarize(mo4ppt = sum(Average)) %>%
+  mutate(season = "febmay")
+
+
+
+
+## Calculate the 25th percentile for precipitation to identify dry events
+drysepdec <- sepdec %>%
+  filter(mo4ppt < quantile(sepdec$mo4ppt, probs = .25, na.rm = TRUE) | mo4ppt < 120) %>%
+  mutate(condition = "dry")
+
+dryfebmay <- febmay %>%
+  filter(mo4ppt < quantile(febmay$mo4ppt, probs = .25, na.rm = TRUE)| mo4ppt < 120) %>%
+  mutate(condition = "dry")
+
+
+
+### PRC with 1999-2013 Data
+```{r}
+## TRYING PRC WITH UP TO 2013 DATA; NOT LOG TRANSFORMED----
+#1 add reference point as a new sampling point to species data
+relcovprc_bi <- rbind(klee_rel_all, refyear_all) %>%
+  pivot_wider(names_from = "SPECIES", values_from = "relcov") %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "REF", "O", "W", "MW", "C", "WC", "MWC")) %>%
+  filter(Date_numeric < 20140601)
+## important that REF is ordered first so that it becomes the comparison
+
+relcovprc_bi[is.na(relcovprc_bi)] <- 0 ## replace NA values with 0
+
+## create vectors of the year and treatment
+year <- as.factor(relcovprc_bi$Date_numeric)
+TRT <- as.factor(relcovprc_bi$TREATMENT)
+
+## remove the non-species columns
+sp_only_bi <- relcovprc_bi %>%
+  ungroup() %>%
+  select(!(1:6))
+
+## Principal Response Curve Analysis
+prc_relcov_bi <- prc(response = sp_only_bi, treatment = TRT, time = year)
+summary(prc_relcov_bi)
+
+prcsum_relcov_bi <- summary(prc_relcov_bi) ## save the summary of the PRC analysis
+
+prc_relresults_bi <- data.frame(coeff = prcsum_relcov_bi$coefficients) %>% ## add the coefficients to a dataframe
+  rownames_to_column("TREATMENT") %>%
+  pivot_longer(cols = 2:28, names_to = "year", values_to = "coeff") %>%
+  mutate(Date_numeric = str_remove(year, "coeff."), Date_final = ymd(Date_numeric)) %>%
+  select(!year) %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))# %>%
+ # mutate(coeff = coeff*(-100))
+
+prc_relresults_bi$TREATMENT <- as.factor(prc_relresults_bi$TREATMENT)
+
+## plot coefficients over time
+ggplot(prc_relresults_bi, aes(x=Date_final, y=coeff, color = TREATMENT)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = green_scale) +
+  xlab("Date") + ylab("PRC Coefficient")
+```
+
+
+
+
+
+
+

@@ -1,0 +1,1568 @@
+---
+title: "KLEE moving window analyses"
+author: "Carmen Ebel"
+date: "7/9/2021"
+output: html_document
+---
+# Data Prep
+## Read in Data
+```{r, echo=FALSE, include=FALSE}
+## set working directory
+setwd("~/Repositories/klee-stability")
+
+## Load packages
+library(tidyverse)
+library(lubridate)
+library(codyn)
+library(tsvr)
+library(forcats)
+library(knitr)
+library(ggpubr)
+library(data.table)
+library(segmented)
+library(breakpoint)
+library(ggrepel)
+library(lme4)
+library(nlme)
+library(scico)
+
+## source cleaned data
+source("klee_allyears_cleaning.R")
+
+## change Treatment to factor in all dataframes
+avg_biomass$TREATMENT <- as.factor(avg_biomass$TREATMENT)
+big5annual$TREATMENT <- as.factor(big5annual$TREATMENT)
+klee_annual$TREATMENT <- as.factor(klee_annual$TREATMENT)
+nondom$TREATMENT <- as.factor(nondom$TREATMENT)
+totcov$TREATMENT <- as.factor(totcov$TREATMENT)
+treats$TREATMENT <- as.factor(treats$TREATMENT)
+
+## Change treatment to an ordered factor
+klee_annual <- klee_annual %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+big5annual <- big5annual %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+nondom <- nondom %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+avg_biomass <- avg_biomass %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+totcov <- totcov %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+treats <- treats %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+```
+
+# Calculations
+## Create Stability over a Moving Window Function
+``` {r, echo = FALSE}
+## create function
+movingwindow_func <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+  
+  n_samples <- length(unique(input_data$Date_final)) ## number of sampling points
+  n_windows <- n_samples - timestep + 1 ## how many windows to iterate over 
+  movingwindow <- data.frame(matrix(ncol=3,nrow=(n_windows*length(unique(input_data$Unique_ID))))) ## create empty dataframe to contain output ## dimensions = # cols (3) x (uniqueID x timesteps)
+  colnames(movingwindow) <- c("Unique_ID", "stability", "timestep")
+  sample_points <- sort(unique(input_data$Date_numeric)) ## create ordered list of sample points
+  
+  n_plots <- length(unique(input_data$Unique_ID)) ## number of unique plots
+  
+  for (i in 1:n_windows){
+    
+    temp_samplepts <- sample_points[i:(i+timestep-1)] ## create a vector of sample points for each iteration
+    
+    temp <- input_data %>%
+      filter(Date_numeric %in% temp_samplepts) ## filter the correct sample points from input data to run through the community stability function
+    
+    temp_commstab <- community_stability(temp,  ## run the community stability function from codyn
+                                time.var = "Date_numeric", 
+                                abundance.var = "Pin_Hits", 
+                                replicate.var = "Unique_ID")
+    temp_commstab$timestep <- i ## create a column for timestep in the temporary data frame
+    
+    movingwindow[((i-1)*n_plots + 1):(i*n_plots),] <- temp_commstab ## add stability calculations for one iteration to the moving window data frame
+    ## ((i-1)*n_plots + 1):(i*n_plots) -> where to put each iteration of the loop
+    
+  }
+  
+  return(movingwindow) ## retrieve data frame at the end
+  
+}
+```
+
+## Apply Stability Moving Window Function
+```{r, echo=FALSE}
+mw_size <- c(3:21)
+
+mwstability <- data.frame(Unique_ID = NA, stability = NA, timestep = NA, window_size = NA)
+
+for(i in 1:length(mw_size)){
+  
+  tmws <- movingwindow_func(input_data = klee_annual, timestep = mw_size[i]) %>%
+    mutate(window_size = mw_size[i])
+  
+  mwstability <- rbind(mwstability, tmws)
+  
+}
+
+mwstability <- mwstability[-1,]
+
+stab_mw_tx <- left_join(mwstability, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, timestep, window_size) %>%
+  summarize(mean_stability = mean(stability), SE = calcSE(stability))
+
+mean_mwstab <- left_join(mwstability, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, window_size) %>%
+  summarise(mean_stab = mean(stability), SE_stab = calcSE(stability))
+```
+
+## Create Synchrony over a Moving Window Function
+```{r, echo=FALSE}
+## create function
+synchronymw_func <- function(input_data, timestep, ...) { ## function inputs = data frame and the time step (window size)
+  
+  n_samples <- length(unique(input_data$Date_final)) ## number of sampling points
+  n_windows <- n_samples - timestep + 1 ## how many windows to iterate over 
+  mw_synchrony <- data.frame(matrix(ncol=3,nrow=(n_windows*length(unique(input_data$Unique_ID))))) ## create empty data frame to contain output ## dimensions = # cols (3) x (uniqueID x timesteps)
+  colnames(mw_synchrony) <- c("Unique_ID", "loreau_synchrony", "timestep")
+  
+  sample_points <- sort(unique(input_data$Date_numeric)) ## create ordered list of sample points
+  
+  n_plots <- length(unique(input_data$Unique_ID)) ## number of unique plots
+  
+  for (k in 1:n_windows){
+    
+    temp_samplepts <- sample_points[k:(k+timestep-1)] ## create a vector of sample points for each iteration
+    
+    temp <- input_data %>%
+      filter(Date_numeric %in% temp_samplepts) ## filter the correct sample points from input data to run through the community stability function
+    
+    ## Calculate Loreau synchrony metric
+    temp_lsyn <- synchrony(
+      temp,
+      time.var = "Date_numeric",
+      species.var = "SPECIES",
+      abundance.var = "Pin_Hits",
+      metric = "Loreau",
+      replicate.var = "Unique_ID"
+      )
+    
+    colnames(temp_lsyn) <- c("Unique_ID", "loreau_synchrony") #rename columns
+    temp_lsyn$timestep <- k ## create a column for timestep in the temporary data frame
+    
+    mw_synchrony[((k-1)*n_plots + 1):(k*n_plots),] <- temp_lsyn ## add synchrony calculations for one iteration to the moving window data frame
+    ## ((i-1)*n_plots + 1):(i*n_plots) -> where to put each iteration of the loop
+    
+  }
+  return(mw_synchrony) ## retrieve data frame at the end
+}
+
+```
+
+## Apply Synchrony Moving Window function
+```{r, echo = FALSE}
+## For all species in the community
+mw_size <- c(4:21)
+
+mwsynchrony <- data.frame(Unique_ID = NA, loreau_synchrony = NA, timestep = NA, window_size = NA)
+
+for(i in 1:length(mw_size)){
+  
+  tmwsyn <- synchronymw_func(input_data = klee_annual, timestep = mw_size[i]) %>%
+    mutate(window_size = mw_size[i])
+  
+  mwsynchrony <- rbind(mwsynchrony, tmwsyn)
+  
+}
+mwsynchrony <- mwsynchrony[-1,]
+
+syn_mw_tx <- left_join(mwsynchrony, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, timestep, window_size) %>%
+  summarize(mean_synchrony = mean(loreau_synchrony), SE_syn = calcSE(loreau_synchrony))
+
+mean_mwsyn <- left_join(mwsynchrony, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, window_size) %>%
+  summarise(mean_syn = mean(loreau_synchrony), SE_syn = calcSE(loreau_synchrony))
+
+
+## For big 5 species
+mw_size <- c(4:21)
+
+b5mwsynchrony <- data.frame(Unique_ID = NA, loreau_synchrony = NA, timestep = NA, window_size = NA)
+
+for(i in 1:length(mw_size)){
+  
+  tmwsyn <- synchronymw_func(input_data = big5annual, timestep = mw_size[i]) %>%
+    mutate(window_size = mw_size[i])
+  
+  b5mwsynchrony <- rbind(b5mwsynchrony, tmwsyn)
+  
+}
+b5mwsynchrony <- b5mwsynchrony[-1,]
+
+b5syn_mw_tx <- left_join(b5mwsynchrony, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, timestep, window_size) %>%
+  summarize(mean_synchrony = mean(loreau_synchrony), SE_syn = calcSE(loreau_synchrony))
+
+b5mean_mwsyn <- left_join(b5mwsynchrony, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, window_size) %>%
+  summarise(mean_syn = mean(loreau_synchrony), SE_syn = calcSE(loreau_synchrony))
+
+## For Subordinate species
+mw_size <- c(4:21)
+
+ndmwsynchrony <- data.frame(Unique_ID = NA, loreau_synchrony = NA, timestep = NA, window_size = NA)
+
+for(i in 1:length(mw_size)){
+  
+  tmwsyn <- synchronymw_func(input_data = nondom, timestep = mw_size[i]) %>%
+    mutate(window_size = mw_size[i])
+  
+  ndmwsynchrony <- rbind(ndmwsynchrony, tmwsyn)
+  
+}
+ndmwsynchrony <- ndmwsynchrony[-1,]
+
+ndsyn_mw_tx <- left_join(ndmwsynchrony, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, timestep, window_size) %>%
+  summarize(mean_synchrony = mean(loreau_synchrony), SE_syn = calcSE(loreau_synchrony))
+
+ndmean_mwsyn <- left_join(ndmwsynchrony, treats, by="Unique_ID") %>%
+  group_by(TREATMENT, window_size) %>%
+  summarise(mean_syn = mean(loreau_synchrony), SE_syn = calcSE(loreau_synchrony))
+
+```
+
+## Calculate TSVR
+### for full community
+```{r,  echo=FALSE}
+## Calculate Timescale Specific VR ##
+#set up data frame to put tsvr into
+outnames <- c("Unique_ID", "TREATMENT", "classicVR", "longVR", "shortVR") #column names
+siteout <- as.data.frame(matrix(nrow=0, ncol = 5)) #make empty dataframe
+names(siteout) <- outnames #set names for empty dataframe
+plots <- unique(klee_annual$Unique_ID) #make vector of unique plots
+
+## Use for loop to calculate TSVR for each plot
+for (i in 1:length(plots)) {
+  
+  #subset by replicate (gives all observations from one plot over time)
+  plot <- subset(klee_annual, Unique_ID == plots[i]) %>%
+    tbl_df()
+  
+  #select species and fill 0's 
+  plot2 <- plot %>%
+    select(Date_numeric, SPECIES, Pin_Hits) %>% #selecting only these three columns
+    spread(SPECIES, Pin_Hits, fill = 0) #changing to wide format
+  
+  #transpose the data 
+  dat <- t(as.matrix(plot2[,2:dim(plot2)[2]]))
+  
+  #create a dataframe with replicate info to attach VR metrics to
+  VR_plots <- plot %>%
+    select(Unique_ID, TREATMENT, BLOCK) %>%
+    unique()
+  
+  #calculate classic VR
+  res0 <- vreq_classic(dat)
+  VR_plots$classicVR <- res0[[3]] #extracting classic VR
+  
+  #calculate tsvr 
+  res <- tsvreq_classic(dat)
+  
+  #aggregate short vs. long variance ratios
+  resLong <- aggts(res, res$ts[res$ts>=4]) #grabbing tsvr with time period >= 4 years
+  resShort <- aggts(res, res$ts[res$ts<4]) #grabbing tsvr with time period <4 years
+  
+  #attach short & long variance ratios
+  VR_plots$longVR <- resLong[[3]]
+  VR_plots$shortVR <- resShort[[3]]
+  
+  #append to external dataframe
+  siteout<-rbind(siteout, VR_plots)
+}
+
+#rename data frame
+tsVR <- siteout #%>%
+ # mutate(community_type = "All_Species")
+
+## Calculate the mean and standard error of VR metrics
+meantsVR <- tsVR %>%
+  pivot_longer(cols = classicVR:shortVR, names_to = "VR_type", values_to = "VR_value" ) %>% #change to long format
+  group_by(TREATMENT, VR_type) %>%
+  summarise(meanVR = mean(VR_value), SEVR = calcSE(VR_value))
+
+#reorder treatments to match grazing pressure.
+meantsVR$TREATMENT <- as.factor(meantsVR$TREATMENT) #change treatment to factor
+meantsVR$TREATMENT <- factor(meantsVR$TREATMENT, levels = c("O", "W",  "MW",  "C", "WC", "MWC"))
+```
+
+### for dominant 5 species
+```{r,  echo=FALSE}
+## Calculate Timescale Specific VR ##
+#set up data frame to put tsvr into
+b5outnames <- c("Unique_ID", "TREATMENT", "classicVR", "longVR", "shortVR") #column names
+b5siteout <- as.data.frame(matrix(nrow=0, ncol = 5)) #make empty dataframe
+names(b5siteout) <- b5outnames #set names for empty dataframe
+b5plots <- unique(big5annual$Unique_ID) #make vector of unique plots
+
+## Use for loop to calculate TSVR for each plot
+for (i in 1:length(b5plots)) {
+  
+  #subset by replicate (gives all observations from one plot over time)
+  plot <- subset(big5annual, Unique_ID == b5plots[i]) %>%
+    tbl_df()
+  
+  #select species and fill 0's 
+  plot2 <- plot %>%
+    select(Date_numeric, SPECIES, Pin_Hits) %>% #selecting only these three columns
+    spread(SPECIES, Pin_Hits, fill = 0) #changing to wide format
+  
+  #transpose the data 
+  dat <- t(as.matrix(plot2[,2:dim(plot2)[2]]))
+  
+  #create a dataframe with replicate info to attach VR metrics to
+  VR_plots <- plot %>%
+    select(Unique_ID, TREATMENT, BLOCK) %>%
+    unique()
+  
+  #calculate classic VR
+  res0 <- vreq_classic(dat)
+  VR_plots$b5classicVR <- res0[[3]] #extracting classic VR
+  
+  #calculate tsvr 
+  res <- tsvreq_classic(dat)
+  
+  #aggregate short vs. long variance ratios
+  resLong <- aggts(res, res$ts[res$ts>=4]) #grabbing tsvr with time period >= 4 years
+  resShort <- aggts(res, res$ts[res$ts<4]) #grabbing tsvr with time period <4 years
+  
+  #attach short & long variance ratios
+  VR_plots$b5longVR <- resLong[[3]]
+  VR_plots$b5shortVR <- resShort[[3]]
+  
+  #append to external dataframe
+  b5siteout<-rbind(b5siteout, VR_plots)
+}
+
+#rename data frame
+b5tsVR <- b5siteout #%>%
+ # mutate(community_type = "Dominant")
+
+
+## Calculate the mean and standard error of VR metrics
+b5meantsVR <- b5tsVR %>%
+  pivot_longer(cols = b5classicVR:b5shortVR, names_to = "VR_type", values_to = "VR_value" ) %>% #change to long format
+  group_by(TREATMENT, VR_type) %>%
+  summarise(meanVR = mean(VR_value), SEVR = calcSE(VR_value))
+
+#reorder treatments to match grazing pressure.
+b5meantsVR$TREATMENT <- as.factor(b5meantsVR$TREATMENT) #change treatment to factor
+b5meantsVR$TREATMENT <- factor(b5meantsVR$TREATMENT, levels = c("O", "W",  "MW",  "C", "WC", "MWC"))
+```
+
+### for subordinate species
+```{r,  echo=FALSE}
+## Calculate Timescale Specific VR ##
+#set up data frame to put tsvr into
+ndoutnames <- c("Unique_ID", "TREATMENT", "classicVR", "longVR", "shortVR") #column names
+ndsiteout <- as.data.frame(matrix(nrow=0, ncol = 5)) #make empty dataframe
+names(ndsiteout) <- ndoutnames #set names for empty dataframe
+ndplots <- unique(nondom$Unique_ID) #make vector of unique plots
+
+## Use for loop to calculate TSVR for each plot
+for (i in 1:length(ndplots)) {
+  
+  #subset by replicate (gives all observations from one plot over time)
+  plot <- subset(nondom, Unique_ID == ndplots[i]) %>%
+    tbl_df()
+  
+  #select species and fill 0's 
+  plot2 <- plot %>%
+    select(Date_numeric, SPECIES, Pin_Hits) %>% #selecting only these three columns
+    spread(SPECIES, Pin_Hits, fill = 0) #changing to wide format
+  
+  #transpose the data 
+  dat <- t(as.matrix(plot2[,2:dim(plot2)[2]]))
+  
+  #create a dataframe with replicate info to attach VR metrics to
+  VR_plots <- plot %>%
+    select(Unique_ID, TREATMENT, BLOCK) %>%
+    unique()
+  
+  #calculate classic VR
+  res0 <- vreq_classic(dat)
+  VR_plots$ndclassicVR <- res0[[3]] #extracting classic VR
+  
+  #calculate tsvr 
+  res <- tsvreq_classic(dat)
+  
+  #aggregate short vs. long variance ratios
+  resLong <- aggts(res, res$ts[res$ts>=4]) #grabbing tsvr with time period >= 4 years
+  resShort <- aggts(res, res$ts[res$ts<4]) #grabbing tsvr with time period <4 years
+  
+  #attach short & long variance ratios
+  VR_plots$ndlongVR <- resLong[[3]]
+  VR_plots$ndshortVR <- resShort[[3]]
+  
+  #append to external dataframe
+  ndsiteout<-rbind(ndsiteout, VR_plots)
+}
+
+#rename data frame
+ndtsVR <- ndsiteout #%>%
+ #mutate(community_type = "Subordinate")
+
+
+## Calculate the mean and standard error of VR metrics
+ndmeantsVR <- ndtsVR %>%
+  pivot_longer(cols = ndclassicVR:ndshortVR, names_to = "VR_type", values_to = "VR_value" ) %>% #change to long format
+  group_by(TREATMENT, VR_type) %>%
+  summarise(meanVR = mean(VR_value), SEVR = calcSE(VR_value))
+
+#reorder treatments to match grazing pressure.
+ndmeantsVR$TREATMENT <- as.factor(ndmeantsVR$TREATMENT) #change treatment to factor
+ndmeantsVR$TREATMENT <- factor(ndmeantsVR$TREATMENT, levels = c("O", "W",  "MW",  "C", "WC", "MWC"))
+```
+
+
+## Create Dominant Sp Pop Stability Moving Window Function
+```{r, echo = FALSE}
+
+## create function
+popstab_mwfunc <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+  
+  n_samples <- length(unique(input_data$Date_final)) ## number of sampling points
+  n_windows <- n_samples - timestep + 1 ## how many windows to iterate over 
+  n_spTX <- length(unique(input_data$TREATMENT))*length(unique(input_data$SPECIES)) ## number of rows that should come out depending on the number of species & treatments
+  
+  movingwindow <- data.frame(matrix(ncol=4,nrow=(n_windows*n_spTX))) ## create empty dataframe to contain output ## dimensions = # cols (4) x (Treatment x Species x timesteps)
+  
+  colnames(movingwindow) <- c("TREATMENT", "SPECIES", "popstability", "timestep")
+  sample_points <- sort(unique(input_data$Date_numeric)) ## create ordered list of sample points
+  
+  for (i in 1:n_windows){
+    
+    temp_samplepts <- sample_points[i:(i+timestep-1)] ## create a vector of sample points for each iteration
+    
+    temp <- input_data %>%
+      filter(Date_numeric %in% temp_samplepts) %>% ## filter the correct sample points from input data to run through the community stability function
+      group_by(TREATMENT, SPECIES) %>%
+      summarise(temp_mean = mean(Pin_Hits), sdhits = sd(Pin_Hits), popstability = temp_mean/sdhits) %>%
+      select(-temp_mean, -sdhits) %>%
+      mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+    
+    temp$timestep <- i ## create a column for timestep in the temporary data frame
+    
+    movingwindow[((i-1)*n_spTX + 1):(i*n_spTX),] <- temp ## add stability calculations for one iteration to the moving window data frame
+
+  }
+  
+  return(movingwindow) ## retrieve data frame at the end
+  
+}
+
+
+popstab <- popstab_mwfunc(input_data = big5annual, timestep = 10)
+
+```
+
+## Calculate Dominant species population stability through time
+```{r}
+
+```
+
+## Create Dominance over a Moving Window Function
+```{r, echo=FALSE} 
+dominancemw_func <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+  
+  n_samples <- length(unique(input_data$Date_final)) ## number of sampling points
+  n_windows <- n_samples - timestep + 1 ## how many windows to iterate over 
+  
+  movingwindow <- data.frame(TREATMENT = NA, Unique_ID = NA, dominance = NA, timestep = NA)
+  
+  #colnames(movingwindow) <- c("TREATMENT", "timestep", "mean_dominance")
+  sample_points <- sort(unique(input_data$Date_numeric)) ## create ordered list of sample points
+  
+  #n_plots <- length(unique(input_data$Unique_ID)) ## number of unique plots
+  #n_trt <- length(unique(input_data$TREATMENT))
+  #treatments <- unique(input_data$TREATMENT)
+  
+  for (i in 1:n_windows){
+    
+    temp_samplepts <- sample_points[i:(i+timestep-1)] ## create a vector of sample points for each iteration
+    
+    temp_dom <- input_data %>%
+      filter(Date_numeric %in% temp_samplepts) %>% ## filter the correct sample points from input data
+      group_by(TREATMENT, Unique_ID, Date_numeric) %>%
+      mutate(rank = rank(Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
+      mutate(tot_abund = sum(Pin_Hits)) %>% #calculate total abundance
+      filter(rank == max(rank)) %>% #only include most abundant species in each plot
+      summarise(dominance = Pin_Hits/tot_abund) #calculate Berger-Parker dominance index
+      
+    temp_dom$timestep <- i ## create a column for timestep in the temporary data frame
+    
+    mean_dom <- temp_dom %>%  ## calculate the average dominance over each time window for each plot
+      group_by(TREATMENT, Unique_ID, timestep) %>%
+      summarise(dominance = mean(dominance))
+    
+    
+    movingwindow <- rbind(movingwindow, mean_dom)
+    
+  }
+  
+  return(movingwindow) ## retrieve data frame at the end
+  
+}
+```
+
+## Apply Dominance MW function
+```{r, echo = FALSE}
+mw_size <- c(3:21)
+
+mwdominance <- data.frame(TREATMENT = NA, Unique_ID = NA, dominance = NA, timestep = NA, window_size = NA)
+
+for(i in 1:length(mw_size)){
+  
+  tmwd <- dominancemw_func(input_data = klee_annual, timestep = mw_size[i]) %>%
+    mutate(window_size = mw_size[i])
+  
+  mwdominance <- rbind(mwdominance, tmwd)
+  
+}
+mwdominance <- mwdominance[-1,]
+
+
+dom_mw_tx <- mwdominance %>%
+  group_by(TREATMENT, timestep, window_size) %>%
+  summarize(mean_dom = mean(dominance), SE_dom = calcSE(dominance)) %>%
+  filter(!is.na(TREATMENT))
+
+dom_mw_tx$TREATMENT <- as.factor(dom_mw_tx$TREATMENT)
+
+dom_mw_tx <- dom_mw_tx %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+
+
+
+
+mean_mwdom <-  mwdominance %>%
+  group_by(TREATMENT, window_size) %>%
+  summarise(mean_dom = mean(dominance), SE_dom = calcSE(dominance)) %>%
+  filter(!is.na(TREATMENT))
+
+mean_mwdom$TREATMENT <- as.factor(mean_mwdom$TREATMENT)
+
+mean_mwdom <- mean_mwdom %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+```
+
+## Create Richness over a Moving Window Function
+```{r, echo=FALSE}
+richnessmw_func <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+  
+  n_samples <- length(unique(input_data$Date_final)) ## number of sampling points
+  n_windows <- n_samples - timestep + 1 ## how many windows to iterate over 
+  
+  movingwindow <- data.frame(TREATMENT = NA, Unique_ID = NA, richness = NA, timestep = NA)
+  
+  #colnames(movingwindow) <- c("TREATMENT", "timestep", "mean_dominance")
+  sample_points <- sort(unique(input_data$Date_numeric)) ## create ordered list of sample points
+  
+  #n_plots <- length(unique(input_data$Unique_ID)) ## number of unique plots
+  #n_trt <- length(unique(input_data$TREATMENT))
+  #treatments <- unique(input_data$TREATMENT)
+  
+  for (i in 1:n_windows){
+    
+    temp_samplepts <- sample_points[i:(i+timestep-1)] ## create a vector of sample points for each iteration
+    
+    temp_rich <- input_data %>%
+      filter(Date_numeric %in% temp_samplepts) %>% ## filter the correct sample points from input data
+      group_by(TREATMENT, Unique_ID, Date_numeric) %>%
+      mutate(richness = n())
+      
+    temp_rich$timestep <- i ## create a column for timestep in the temporary data frame
+    
+    mean_rich <- temp_rich %>%  ## calculate the average dominance over each time window for each plot
+      group_by(TREATMENT, Unique_ID, timestep) %>%
+      summarise(richness = mean(richness))
+    
+    movingwindow <- rbind(movingwindow, mean_rich)
+    
+  }
+  
+  return(movingwindow) ## retrieve data frame at the end
+  
+}
+```
+
+## Apply Richness MW Function
+```{r, echo=FALSE}
+mw_size <- c(3:21)
+
+mwrichness <- data.frame(TREATMENT = NA, Unique_ID = NA, richness = NA, timestep = NA, window_size = NA)
+
+for(i in 1:length(mw_size)){
+  
+  tmwr <- richnessmw_func(input_data = klee_annual, timestep = mw_size[i]) %>%
+    mutate(window_size = mw_size[i])
+  
+  mwrichness <- rbind(mwrichness, tmwr)
+  
+}
+
+mwrichness <- mwrichness[-1,]
+
+rich_mw_tx <- mwrichness %>%
+  group_by(TREATMENT, timestep, window_size) %>%
+  summarize(mean_rich = mean(richness), SE_rich = calcSE(richness)) %>%
+  filter(!is.na(TREATMENT))
+
+rich_mw_tx$TREATMENT <- as.factor(rich_mw_tx$TREATMENT)
+rich_mw_tx <- rich_mw_tx %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+
+
+mean_mwrich <-  mwrichness %>%
+  group_by(TREATMENT, window_size) %>%
+  summarise(mean_rich = mean(richness), SE_rich = calcSE(richness)) %>%
+  filter(!is.na(TREATMENT))
+
+mean_mwrich$TREATMENT <- as.factor(mean_mwrich$TREATMENT)
+
+mean_mwrich <- mean_mwrich %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+```
+
+# Classifying Windows with Drought Presence
+```{r}
+## use the droughts identified currently - but email Kari, Corinna, etc. for their drought years & calcs to verify
+## need to determine which windows contain the particular drought years and code as 0 = no drought and 1 = drought
+
+## load in ppt data 
+source("precipitation_data_cleaning.R")
+
+## create drought MW ID function
+droughtIDfunc <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+  
+  ## number of sampling points
+  n_samples <- length(unique(pptcondition$Year)) 
+  
+  ## number of windows to iterate over
+  n_windows <- n_samples - timestep + 1  
+
+  ## create ordered list of sample points
+  sample_points <- sort(unique(input_data$Year)) 
+  
+  ## create dataframe to contain output
+  drought_flags <- as.data.frame(matrix(nrow = n_windows, ncol = 2))
+  
+  ## rename columns
+  colnames(drought_flags) <- c("timestep", "drought_in_window")
+  
+  ## set default values of drought_flags 
+  drought_flags$timestep <- c(1:n_windows)
+  drought_flags$drought_in_window <- 0
+  
+  ## iterate over every window in the time series
+  for (i in 1:n_windows){
+    
+    ## create a vector of sample points for each iteration
+    temp_samplepts <- sample_points[i:(i+timestep-1)] 
+    
+    ## filter the correct sample points from input data
+    temp <- input_data %>%
+      filter(Year %in% temp_samplepts)  
+    
+    ## set default value of drought in window to FALSE
+    drought_in_window <- FALSE
+    
+    
+    ## iterate through each date in the window
+    for (j in 1:length(temp$Date_final)){
+      
+      ## if there is a drought at any date, set the drought_in_window value to TRUE
+      if(temp[j,]$condition == "dry") {
+        drought_in_window <- TRUE
+      } 
+    }
+    
+    ## if a drought is flagged anywhere in the window, set the value in drought_flags dataframe to 1 for the respective window
+    if(drought_in_window == TRUE){
+      drought_flags[i,]$drought_in_window <- 1
+    }
+    
+  }
+  
+  return(drought_flags) ## retrieve data frame at the end
+  
+}
+
+
+## calculate whether there is a drought in every 3 year window
+drought3 <- droughtIDfunc(input_data = pptcondition, timestep = 3)
+
+## match this up with stability 3yr moving window data
+stabmw3 <- stab_mw_tx %>%
+  filter(window_size == "3")
+
+stdrought3 <- left_join(stabmw3, drought3, by = "timestep")
+
+stdrought3$drought_in_window <- as.factor(stdrought3$drought_in_window)
+
+ggplot(stdrought3, aes(x=timestep, y=mean_stability, color = TREATMENT, shape = drought_in_window)) +
+  #geom_line() +
+  geom_point() +
+  facet_wrap(~TREATMENT)
+
+
+## This approach works, but droughts are frequent enough that unless the window size is very small, every window will incorporate a drought. Thus, need more information about specific droughts or drought relevance (position in the window)
+```
+
+## Classify Windows with Drought Relevance
+```{r}
+## need to change how droughts are coded in order to more easily assess drought relevance
+pptcondition <- pptcondition %>%
+  mutate(dry = ifelse(condition == "dry", 1, 0))
+
+
+### CREATE FUNCTION ###
+## create drought MW ID function
+droughtrelIDfunc <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+  
+  ## number of sampling points
+  n_samples <- length(unique(pptcondition$Year)) 
+  
+  ## number of windows to iterate over
+  n_windows <- n_samples - timestep + 1  
+
+  ## create ordered list of sample points
+  sample_points <- sort(unique(input_data$Year)) 
+  
+  ## create dataframe to contain output
+  drought_relevance <- as.data.frame(matrix(nrow = n_windows, ncol = 4))
+  
+  ## rename columns
+  colnames(drought_relevance) <- c("timestep", "Dscore", "num_drought", "drought")
+  
+  ## set default values of drought_flags 
+  drought_relevance$timestep <- c(1:n_windows)
+  drought_relevance$drought <- 0
+  drought_relevance$Dscore <- 0
+  drought_relevance$num_drought <- 0
+  
+  ## iterate over every window in the time series
+  for (i in 1:n_windows){
+    
+    ## create a vector of sample points for each iteration
+    temp_samplepts <- sample_points[i:(i+timestep-1)] 
+    
+    ## filter the correct sample points from input data
+    temp <- input_data %>%
+      filter(Year %in% temp_samplepts) %>%
+      select(-tot4moppt, -meanppt, -SEppt, -season, -day)
+    
+    ## set default value of drought in window to FALSE
+   # drought_in_window <- FALSE
+    
+    index_position  <- unique(temp$Year)
+    
+    ## create empty dataframe to contain output of second loop
+    droughtIDs <- data.frame(Year = NA, numdroughts = NA, drought = NA, Dscore_indiv = NA, timestep = NA)
+    
+    ## iterate through each YEAR in the window
+    for (j in 1:length(index_position)){
+     
+      ## need to separate each date first
+      date <- index_position[j]
+      
+      ## identify & score individual droughts in a window
+      tempDrID <- temp %>%
+        filter(Year %in% date) %>%
+        group_by(Year) %>%
+        summarise(numdroughts = sum(dry)) %>%
+        mutate(drought = ifelse(numdroughts > 0, 1, 0), 
+               Dscore_indiv = ifelse(drought == "1", 1/j, 0)) 
+      
+      ## make a column for timestep
+      tempDrID$timestep <- i
+      
+      
+      droughtIDs <- rbind(droughtIDs, tempDrID) %>%
+        filter(!is.na(Year))
+    
+      }
+    
+    ## if a drought is flagged anywhere in the window, set the value in drought_flags dataframe to 1 for the respective window
+    meantempDrID <- droughtIDs %>%
+      group_by(timestep) %>%
+      summarise(Dscore = sum(Dscore_indiv), num_drought = sum(numdroughts)) %>%
+      mutate(drought = ifelse(Dscore > 0, 1, 0))
+    
+    
+    if(meantempDrID$drought == "1"){
+      drought_relevance[i,] <- meantempDrID
+    }
+    
+  }
+  
+  return(drought_relevance) ## retrieve data frame at the end
+  
+}
+
+## use the function with 3 year window
+droughtrel3 <- droughtrelIDfunc(input_data = pptcondition, timestep = 3)
+
+stdr3 <- left_join(stabmw3, droughtrel3, by = "timestep")
+
+ggplot(stdr3, aes(x=timestep, y=mean_stability, color = Dscore)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~TREATMENT)
+
+
+
+## try with 5 year window
+droughtrel5 <- droughtrelIDfunc(input_data = pptcondition, timestep = 5)
+
+stdr5 <- left_join(stabmw5, droughtrel5, by = "timestep")
+
+ggplot(stdr5, aes(x=timestep, y=mean_stability, color = Dscore, shape = TREATMENT)) +
+  geom_line() +
+  geom_point() #+
+  #facet_wrap(~TREATMENT)
+
+
+
+## try with 10 year window
+droughtrel10 <- droughtrelIDfunc(input_data = pptcondition, timestep = 10)
+
+stabmw10 <- stab_mw_tx %>%
+  filter(window_size == "10")
+
+stdr10 <- left_join(stabmw10, droughtrel10, by = "timestep")
+
+ggplot(stdr10, aes(x=timestep, y=mean_stability, color = Dscore, shape = TREATMENT)) +
+  geom_line() +
+  geom_point()
+```
+
+
+
+# Analysis & Significance Testing
+## Correlation Analysis for Moving Windows
+```{r, echo=FALSE}
+## Stability Dominance Correlation test ---- 
+##create data frame for correlation test
+stab_dom_mw <- left_join(stab_mw_tx, dom_mw_tx, by = c("TREATMENT", "timestep", "window_size")) %>%
+  filter(window_size > 3, window_size < 16)
+
+## create vector of treatments
+trt <- unique(stab_dom_mw$TREATMENT)
+
+## create vector of window size
+wsize <- unique(stab_dom_mw$window_size)
+
+corr_dom <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficient = NA, p_val = NA) ## create empty dataframe to contain output
+
+
+for (i in 1:length(trt)) {
+  
+  ## select the ith treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- stab_dom_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortst <- cor.test(tempw$mean_dom, tempw$mean_stability, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+    t <- tempw %>%
+      group_by(TREATMENT) %>%
+      summarise(window_size = mean(window_size)) %>%
+      mutate(corr_coefficient = cortst$estimate, p_val = cortst$p.value)
+     
+    corr_dom <- rbind(corr_dom, t)
+    
+  }
+  
+}
+corr_dom <- corr_dom[-1,]
+
+## create a variable indicating significance of p-value
+corr_dom <- corr_dom %>%
+  mutate(significant = ifelse(p_val < 0.051, "S", 
+                              ifelse(p_val > 0.05 & p_val < 0.07, "M", "NS")))
+
+print(corr_dom)
+```
+
+
+```{r}
+## Does Synchrony correlate with Stability changes over time? ----
+stab_syn_mw <- left_join(stab_mw_tx, syn_mw_tx, by = c("TREATMENT", "timestep", "window_size")) %>%
+  filter(window_size > 3, window_size < 16)
+
+## create vector of treatments
+trt <- unique(stab_syn_mw$TREATMENT)
+
+## create vector of window size
+wsize <- unique(stab_syn_mw$window_size)
+
+corr_syn <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficient = NA, p_val = NA) ## create empty dataframe to contain output
+
+
+for (i in 1:length(trt)) {
+  
+  ## select the treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- stab_syn_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortst <- cor.test(tempw$mean_synchrony, tempw$mean_stability, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+     t <- tempw %>%
+       group_by(TREATMENT) %>% 
+       summarise(window_size = mean(window_size)) %>%
+       mutate(corr_coefficient = cortst$estimate, p_val = cortst$p.value) 
+     
+    corr_syn <- rbind(corr_syn, t)
+  }
+  
+}
+
+corr_syn <- corr_syn[-1,]
+
+## create a variable indicating significance of p-value
+corr_syn <- corr_syn %>%
+  mutate(significant = ifelse(p_val < 0.051, "S", 
+                              ifelse(p_val > 0.05 & p_val < 0.07, "M", "NS")))
+
+print(corr_syn)
+```
+
+
+
+```{r}
+## Big 5 Synchrony Stability Correlation Test ----
+big5stab_syn_mw <- left_join(stab_mw_tx, b5syn_mw_tx, by = c("TREATMENT", "timestep", "window_size")) %>%
+  filter(window_size > 3, window_size < 16)
+
+## create vector of treatments
+trt <- unique(big5stab_syn_mw$TREATMENT)
+
+## create vector of window size
+wsize <- unique(big5stab_syn_mw$window_size)
+
+b5corr_syn <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficient = NA, p_val = NA) ## create empty dataframe to contain output
+
+
+for (i in 1:length(trt)) {
+  
+  ## select the treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- big5stab_syn_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortst <- cor.test(tempw$mean_synchrony, tempw$mean_stability, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+     t <- tempw %>%
+       group_by(TREATMENT) %>% 
+       summarise(window_size = mean(window_size)) %>%
+       mutate(corr_coefficient = cortst$estimate, p_val = cortst$p.value) #%>%
+      # mutate(corr_coefficientg = cortstg$estimate, gp_val = cortstg$p.value)
+
+    b5corr_syn <- rbind(b5corr_syn, t)
+  }
+  
+}
+
+b5corr_syn <- b5corr_syn[-1,]
+
+## create a variable indicating significance of p-value
+b5corr_syn <- b5corr_syn %>%
+  mutate(significant = ifelse(p_val < 0.051, "S", 
+                              ifelse(p_val > 0.05 & p_val < 0.07, "M", "NS")))
+print(b5corr_syn)
+
+```
+
+```{r}
+## Non Dominant Synchrony Stability Correlation Test ----
+nondomstab_syn_mw <- left_join(stab_mw_tx, ndsyn_mw_tx, by = c("TREATMENT", "timestep", "window_size")) %>%
+  filter(window_size > 3, window_size < 16)
+
+## create vector of treatments
+trt <- unique(nondomstab_syn_mw$TREATMENT)
+
+## create vector of window size
+wsize <- unique(nondomstab_syn_mw$window_size)
+
+ndcorr_syn <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficient = NA, p_val = NA) ## create empty dataframe to contain output
+
+
+for (i in 1:length(trt)) {
+  
+  ## select the treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- nondomstab_syn_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortst <- cor.test(tempw$mean_synchrony, tempw$mean_stability, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+     t <- tempw %>%
+       group_by(TREATMENT) %>% 
+       summarise(window_size = mean(window_size)) %>%
+       mutate(corr_coefficient = cortst$estimate, p_val = cortst$p.value)# %>%
+     #  mutate(corr_coefficientg = cortstg$estimate, gp_val = cortstg$p.value)
+
+    ndcorr_syn <- rbind(ndcorr_syn, t)
+  }
+}
+
+ndcorr_syn <- ndcorr_syn[-1,]
+
+## create a variable indicating significance of p-value
+ndcorr_syn <- ndcorr_syn %>%
+  mutate(significant = ifelse(p_val < 0.051, "S", 
+                              ifelse(p_val > 0.05 & p_val < 0.07, "M", "NS")))
+
+print(ndcorr_syn)
+```
+
+
+```{r}
+corr_syn$TREATMENT <- as.factor(corr_syn$TREATMENT) #change treatment to factor
+corr_syn$TREATMENT <- factor(corr_syn$TREATMENT, levels = c("O", "W", "MW", "C", "WC", "MWC"))
+
+## Make one correlation data frame
+corr_syn <- corr_syn %>%
+  mutate(type = "all species")
+b5corr_syn <- b5corr_syn %>%
+  mutate(type = "big 5")
+ndcorr_syn <- ndcorr_syn %>%
+  mutate(type="non-dominant")
+
+syncorr <- rbind(corr_syn, b5corr_syn)
+syncorr_all <- rbind(syncorr, ndcorr_syn) 
+
+```
+
+
+```{r}
+## Synchrony and Dominance Correlation Test ----
+syn_dom_mw <- left_join(syn_mw_tx, dom_mw_tx, by = c("TREATMENT", "timestep", "window_size"))
+
+## create vector of treatments
+trt <- unique(syn_dom_mw$TREATMENT)
+
+## create vector of window size
+wsize <- unique(syn_dom_mw$window_size)
+
+corr_syndom <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficient = NA, p_val = NA) ## create empty dataframe to contain output
+
+
+for (i in 1:length(trt)) {
+  
+  ## select the ith treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- syn_dom_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortst <- cor.test(tempw$mean_dominance, tempw$meanloreau, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+    t <- tempw %>%
+      group_by(TREATMENT) %>%
+      summarise(window_size = mean(window_size)) %>%
+      mutate(corr_coefficient = cortst$estimate, p_val = cortst$p.value)
+     
+    corr_syndom <- rbind(corr_syndom, t)
+    
+  }
+  
+}
+corr_syndom <- corr_syndom[-1,]
+
+## create a variable indicating significance of p-value
+corr_syndom <- corr_syndom %>%
+  mutate(significant = ifelse(p_val < 0.051, "S", 
+                              ifelse(p_val > 0.05 & p_val < 0.07, "M", "NS")))
+
+print(corr_syndom)
+
+```
+
+
+```{r}
+## Stability Richness Correlation test ---- 
+##create data frame for correlation test
+stab_rich_mw <- left_join(stab_mw_tx, rich_mw_tx, by = c("TREATMENT", "timestep", "window_size")) %>%
+  filter(window_size > 3, window_size < 16)
+
+## create vector of treatments
+trt <- unique(stab_rich_mw$TREATMENT)
+
+## create vector of window size
+wsize <- unique(stab_rich_mw$window_size)
+
+corr_rich <- data.frame(TREATMENT = NA, window_size = NA, corr_coefficient = NA, p_val = NA) ## create empty dataframe to contain output
+
+
+for (i in 1:length(trt)) {
+  
+  ## select the ith treatment
+  tx <- trt[i]
+  
+  ## filter by treatment
+  temptx <- stab_rich_mw %>%
+    filter(TREATMENT %in% tx)
+  
+  for (j in 1:length(wsize)){
+    
+    ## select window size
+    wind <- wsize[j]
+    
+    ## filter by window size
+    tempw <- temptx %>%
+      filter(window_size %in% wind)
+    
+    ## feed through cor.test function
+    cortst <- cor.test(tempw$mean_rich, tempw$mean_stability, 
+             alternative = "two.sided", 
+             method = "pearson")
+    
+    t <- tempw %>%
+      group_by(TREATMENT) %>%
+      summarise(window_size = mean(window_size)) %>%
+      mutate(corr_coefficient = cortst$estimate, p_val = cortst$p.value)
+     
+    corr_rich <- rbind(corr_rich, t)
+    
+  }
+  
+}
+corr_rich <- corr_rich[-1,]
+
+## create a variable indicating significance of p-value
+corr_rich <- corr_rich %>%
+  mutate(significant = ifelse(p_val < 0.051, "S", 
+                              ifelse(p_val > 0.05 & p_val < 0.07, "M", "NS")))
+
+print(corr_rich)
+```
+
+
+## Significance Testing
+```{r}
+
+
+
+
+```
+
+# Figure Settings
+```{r, echo=FALSE, include=FALSE}
+green_scale <- c("#97e196", "#6cc08b", "#4c9b82", "#217a79", "#105965", "#074050") #make a vector of colors
+colors <- c("#88CCEE", "#CC6677","#DDCC77","#117733","#332288","#AA4499","#44AA99","#999933","#882255","#661100","#6699CC","#888888")
+theme_set(theme_classic()) #set the theme
+```
+
+# Figures
+## TSVR Plot
+```{r, echo=FALSE, fig.width=8.25, fig.height=3.25}
+
+tsvrplot <- meantsVR %>%
+  filter(VR_type != "classicVR")
+
+full <- ggplot(tsvrplot, aes(x=TREATMENT, y=meanVR)) +
+  geom_point(size = 2.5) +
+  geom_errorbar(aes(ymin = meanVR-SEVR, ymax=meanVR+SEVR), width = 0.4) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_point(aes(fill=VR_type), 
+       colour="black",pch=21, size=4) +
+  scale_fill_manual(values = c("#c8c8c8", "#4f4f4f")) +
+ # scale_color_manual(values = c("#000000", "#4f4f4f")) +
+  ylab("TSVR full community") + xlab("") +
+  coord_cartesian(ylim = c(0.4, 3.75)) +
+  labs(fill = "Variance Ratio Type") +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) #change font sizes
+
+
+#88CCEE,#CC6677,#DDCC77,#117733,#332288,#AA4499,#44AA99,#999933,#882255,#661100,#6699CC,#888888
+
+b5tsvrplot <- b5meantsVR %>%
+  filter(VR_type != "b5classicVR")
+
+b5 <- ggplot(b5tsvrplot, aes(x=TREATMENT, y=meanVR)) +
+  geom_point(size = 2.5) +
+  geom_errorbar(aes(ymin = meanVR-SEVR, ymax=meanVR+SEVR), width = 0.4) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_point(aes(fill=VR_type), 
+       colour="black",pch=21, size=4) +
+  scale_fill_manual(values = c("#c8c8c8", "#4f4f4f")) +  
+  ylab("TSVR dominant sp") + xlab("") +
+  coord_cartesian(ylim = c(0.4, 3.75)) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) #change font sizes
+
+ndtsvrplot <- ndmeantsVR %>%
+  filter(VR_type != "ndclassicVR")
+
+nd <- ggplot(ndtsvrplot, aes(x=TREATMENT, y=meanVR)) +
+  geom_point(size = 2.5) +
+  geom_errorbar(aes(ymin = meanVR-SEVR, ymax=meanVR+SEVR), width = 0.4) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_point(aes(fill=VR_type), 
+       colour="black",pch=21, size=4) +
+  scale_fill_manual(values = c("#c8c8c8", "#4f4f4f")) +  
+  ylab("TSVR subordinate sp") + xlab("") +
+  coord_cartesian(ylim = c(0.4, 3.75)) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) #change font sizes
+
+
+ggarrange(full, b5, nd, 
+          ncol= 3, nrow = 1, 
+          align = "hv", 
+          common.legend = TRUE, 
+          labels = "AUTO")
+```
+
+
+## Stability & Mechanism by Timescale 
+```{r, echo = FALSE, fig.width=9, fig.height=8}
+## Stability by Timescale
+stabts <- ggplot(mean_mwstab, aes(x = window_size, y=mean_stab)) +
+  geom_point(size = 3) +
+  ylab("Mean Stability") + xlab("Window Size of Stability Calculation") +
+  geom_errorbar(aes(ymin=mean_stab-SE_stab, ymax = mean_stab+SE_stab), width = 0.2) +
+  geom_point(aes(fill=TREATMENT), 
+       colour="black",pch=21, size=3.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  labs(fill = "Treatment")
+
+## Synchrony by Timescale
+synts <- ggplot(mean_mwsyn, aes(x = window_size, y=mean_syn)) +
+  geom_point(size = 3) +
+  ylab("Mean Synchrony") + xlab("Window Size of Synchrony Calculation") +
+  geom_errorbar(aes(ymin=mean_syn-SE_syn, ymax = mean_syn+SE_syn), width = 0.2) +
+  geom_point(aes(fill=TREATMENT), 
+       colour="black",pch=21, size=3.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  labs(fill = "Treatment")
+
+## Dominance by Timescale
+domts <- ggplot(mean_mwdom, aes(x=window_size, y=mean_dom)) +
+  geom_point(size=3) +
+  ylab("Mean Dominance") + xlab("Window Size of Dominance Calculation") +
+  geom_errorbar(aes(ymin=mean_dom-SE_dom, ymax = mean_dom+SE_dom), width = 0.2) +
+  geom_point(aes(fill=TREATMENT), 
+       colour="black",pch=21, size=3.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  labs(fill = "Treatment")
+
+## Richness by Timescale
+richts <- ggplot(mean_mwrich, aes(x=window_size, y=mean_rich)) +
+  geom_point(size=3) +
+  ylab("Mean Richness") + xlab("Window Size of Richness Calculation") +
+  geom_errorbar(aes(ymin=mean_rich-SE_rich, ymax = mean_rich+SE_rich), width = 0.2) +
+  geom_point(aes(fill=TREATMENT), 
+       colour="black",pch=21, size=3.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  labs(fill = "Treatment")
+
+ggarrange(stabts, synts, domts, richts, 
+          ncol=2, nrow = 2, align = "hv", 
+          common.legend = TRUE, 
+          labels = "AUTO")
+```
+
+## Pop Stability through Time
+```{r}
+ggplot(popstab, aes(x=timestep, y=popstability, color = TREATMENT)) +
+  geom_line()
+
+
+```
+
+## Figure 4: Correlations
+```{r, fig.height=7, fig.width=10, echo=FALSE}
+## Dominance Correlations
+mw7stab_dom_mw <- stab_dom_mw %>%
+  filter(window_size == "7")
+
+mw7synstabfig <- stab_syn_mw %>%
+  filter(window_size == 7)
+
+mw7richstabfig <- stab_rich_mw %>%
+  filter(window_size == 7)
+
+corrsynstab <- ggplot(mw7synstabfig, aes(x=mean_synchrony, y=mean_stability, color = timestep)) +
+    geom_point() +
+    ylab("Stability") + xlab("Synchrony") +
+    facet_wrap(~TREATMENT, ncol = 6) +
+    theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+corrdomstab <- ggplot(mw7stab_dom_mw, aes(x=mean_dom, y=mean_stability, color = timestep)) +
+  geom_point() +
+  ylab("Stability") + xlab("Dominance") +
+  facet_wrap(~TREATMENT, ncol = 6) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) +
+  coord_cartesian(xlim = c(0.3, 0.45))
+
+corrrichstab <- ggplot(mw7richstabfig, aes(x=mean_rich, y=mean_stability, color = timestep)) +
+  geom_point() +
+  ylab("Stability") + xlab("Richness") +
+  facet_wrap(~TREATMENT, ncol = 6) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))# +
+  coord_cartesian(xlim = c(0.3, 0.45))
+
+
+ggarrange(corrsynstab, corrdomstab, corrrichstab,
+          common.legend = TRUE, 
+          ncol = 1, 
+          legend = "right", 
+          labels = "AUTO")
+```
+
+
+## Figure 5: Correlation Coefficients
+```{r, echo = FALSE, fig.width=9, fig.height=6}
+syncoeff <- ggplot(syncorr_all, aes(x=TREATMENT, y=corr_coefficient, color = type, shape = significant)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  ylab("Synchrony and Stability") + xlab("") +
+  scale_color_manual(values = c("#E58606", "#5D69B1", "#52BCA3")) +
+  labs(col = "Type", shape = "Significance") +
+  scale_shape_manual(values = c(10,1,16)) +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+
+corr_dom$TREATMENT <- as.factor(corr_dom$TREATMENT) #change treatment to factor
+corr_dom$TREATMENT <- factor(corr_dom$TREATMENT, levels = c("O", "W", "MW", "C", "WC", "MWC"))
+
+domcoeff <- ggplot(corr_dom, aes(x=TREATMENT, y=corr_coefficient, shape = significant)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  ylab("Dominance and Stability") + xlab("Treatment") +
+  scale_color_manual(values = c("#ED645A","#CC3A8E","#A5AA99")) +
+  labs(shape = "Significance") +
+  scale_shape_manual(values = c(10, 1,16)) +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) +
+  theme(legend.position = "none")
+#E58606,#5D69B1,#52BCA3,#99C945,#CC61B0,#24796C,#DAA51B,#2F8AC4,#764E9F,#ED645A,#CC3A8E,#A5AA99
+
+
+corr_rich$TREATMENT <- as.factor(corr_rich$TREATMENT) #change treatment to factor
+corr_rich$TREATMENT <- factor(corr_rich$TREATMENT, levels = c("O", "W", "MW", "C", "WC", "MWC"))
+
+richcoeff <- ggplot(corr_rich, aes(x=TREATMENT, y=corr_coefficient, shape = significant)) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  ylab("Richness and Stability") + xlab("Treatment") +
+  scale_color_manual(values = c("#ED645A","#CC3A8E","#A5AA99")) +
+  labs(shape = "Significance") +
+  scale_shape_manual(values = c(10, 1,16)) +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) +
+  theme(legend.position = "none")
+
+
+ggarrange(syncoeff,
+          domcoeff, 
+          ncol = 1, nrow = 2, 
+          align = "hv", 
+          common.legend = TRUE, 
+          legend = "right")
+```
+
+
+## Figure S7: Moving Window Mechanisms
+```{r, echo=FALSE, fig.height=11, fig.width=11}
+## filter out window sizes to plot
+mwstabplot <- stab_mw_tx %>%
+  filter(window_size == "5" | window_size == "10" | window_size == "12")
+
+mwstab<-ggplot(mwstabplot, aes(x=timestep, y=mean_stability, color = TREATMENT)) +
+  geom_line() +
+  geom_point(size = 2) +
+  scale_color_scico_d(palette = "batlow", direction = -1) + #change color scheme
+  ylab("Stability") + xlab("Timestep") +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+## filter out window sizes to plot
+mwsynplot <- syn_mw_tx %>%
+  filter(window_size == "5" | window_size == "10" | window_size == "12")
+
+mwsyn <- ggplot(mwsynplot, aes(x=timestep, y=mean_synchrony, color = TREATMENT)) +
+  geom_line() +
+  geom_point(size = 2) +
+  scale_color_scico_d(palette = "batlow", direction = -1) + #change color scheme
+  ylab("Synchrony") + xlab("Timestep") +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+## filter out window sizes to plot
+mwdomplot <- dom_mw_tx %>%
+  filter(window_size == "5" | window_size == "10" | window_size == "12")
+
+mwdom <- ggplot(mwdomplot, aes(x=timestep, y=mean_dom, color = TREATMENT)) +
+  geom_line() +
+  geom_point(size = 2) +
+  scale_color_scico_d(palette = "batlow", direction = -1) + #change color scheme
+  ylab("Dominance") + xlab("Timestep") +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+## filter out window sizes to plot
+mwrichplot <- rich_mw_tx %>%
+  filter(window_size == "5" | window_size == "10" | window_size == "12")
+
+mwrich <- ggplot(mwrichplot, aes(x=timestep, y=mean_rich, color = TREATMENT)) +
+  geom_line() +
+  geom_point(size = 2) +
+  scale_color_scico_d(palette = "batlow", direction = -1) + #change color scheme
+  ylab("Richness") + xlab("Timestep") +
+  facet_wrap(~window_size) +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+ggarrange(mwstab, mwsyn, mwdom, mwrich,
+          ncol = 1, nrow = 4,
+          #align = "hv", 
+          common.legend = TRUE, 
+          labels = "AUTO", 
+          legend = "bottom")
+```
+
+
+
+## Figure S8: Synchrony over a moving window (Big 5 & Non Dom)
+#```{r, echo=FALSE, fig.width =8, fig.height=4}
+
+ggplot(big5syn_mw_tx, aes(x=timestep, y=meanloreau, color = TREATMENT)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = colors) + #change color scheme
+  ylab("Mean Loreau Synchrony (Big 5)") + xlab("Timestep") +
+  facet_wrap(~window_size)
+
+
+ggplot(nondomsyn_mw_tx, aes(x=timestep, y=meanloreau, color = TREATMENT)) +
+  geom_line() +
+  geom_point() +
+  scale_color_manual(values = colors) + #change color scheme
+  ylab("Mean Loreau Synchrony (Non-Dom)") + xlab("Timestep") +
+  facet_wrap(~window_size)
+
+#```
+
+
+
+## Figure S10: Synchrony-Stability Correlations Final Figs
+#```{r, fig.height=8, fig.width=8, echo=FALSE}
+mw7synstabfig <- stab_syn_mw %>%
+  filter(window_size == 7)
+
+corrsynL <- ggplot(mw7synstabfig, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+    geom_point() +
+    ylab("Stability") + xlab("Loreau Synchrony: All species") +
+    facet_wrap(~TREATMENT, ncol = 6) +
+    theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+mw7big5synstabfig <- big5stab_syn_mw %>%
+  filter(window_size == 7)
+
+b5corrsynL <- ggplot(mw7big5synstabfig, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+    geom_point() +
+    ylab("Stability") + xlab("Loreau Synchrony: Big 5 species") +
+    facet_wrap(~TREATMENT, ncol = 6) +
+    theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+
+mw7nondomsynstabfig <- nondomstab_syn_mw %>%
+  filter(window_size == 7)
+
+ndcorrsynL <- ggplot(mw7nondomsynstabfig, aes(x=meanloreau, y=mean_stability, color = timestep)) +
+    geom_point() +
+    ylab("Stability") + xlab("Loreau Synchrony: Non-dominant species") +
+    facet_wrap(~TREATMENT, ncol = 6) +
+    theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))
+
+
+ggarrange(corrsynL, b5corrsynL, ndcorrsynL,
+          ncol = 1, nrow = 3, align = "hv", 
+          common.legend = TRUE, 
+          labels = "AUTO",
+          legend = "bottom"
+          )
+#```
+

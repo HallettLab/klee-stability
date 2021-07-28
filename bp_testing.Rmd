@@ -1,0 +1,887 @@
+---
+title: "Exploring Breakpoints"
+author: "Carmen Ebel"
+date: "7/21/2021"
+output: html_document
+---
+
+## Load Data
+```{r}
+setwd("~/Repositories/klee-stability")
+
+## Load packages
+library(tidyverse)
+library(vegan)
+library(forcats)
+library(lubridate)
+library(codyn)
+library(ggpubr)
+library(segmented)
+
+## source cleaned data
+source("klee_allyears_cleaning.R")
+source("precipitation_data_cleaning.R")
+
+## figure settings
+theme_set(theme_classic()) #set the theme
+```
+
+
+## Calculate Stability & Mechanisms around all potential breakpoints
+```{r}
+
+bp <- sort(unique(klee_annual$Date_numeric)) ## create a vector of dates to split by
+bp <- bp[-c(1:3,20:22)] ## filter out first and last 3 years so that it won't split into 1 year vs. 20 years before stability calculations
+
+## Create an empty dataframe to contain the output
+bp_smech <- data.frame(Unique_ID = NA, TREATMENT = NA, stability = NA, synchrony = NA, dominance = NA, period = NA, breakpt = NA)
+
+
+## for every date, separate the dataframe into two parts and calculate stability, synchrony, dominance
+for(i in 1:length(bp)){
+  
+  ## divide the dataframe into two parts
+  pre <- klee_annual %>%
+  filter(Date_numeric <= bp[i])
+
+  post <- klee_annual %>%
+    filter(Date_numeric > bp[i])
+  
+  dat_type <- c("pre", "post")
+  
+  ## for each data frame (pre and post), calculate: stability, synchrony, dominance
+  for(j in 1:length(dat_type)){
+    
+    # Fetch the data set 
+    dat <- get(dat_type[j])
+    
+    # calculate stability
+    stab <- community_stability(dat, 
+                                time.var = "Date_numeric", 
+                                abundance.var = "Pin_Hits", 
+                                replicate.var = "Unique_ID")
+    # calculate synchrony
+    synchrony <- synchrony(
+      dat,
+      time.var = "Date_numeric",
+      species.var = "SPECIES",
+      abundance.var = "Pin_Hits",
+      metric = "Loreau",
+      replicate.var = "Unique_ID")
+  
+     ## calculate Berger-Parker Dominance for each unique ID at each date
+    tempdom <- dat %>%
+      group_by(TREATMENT, Unique_ID, Date_final) %>% #group by treatment, plot, and date
+      mutate(rank = rank(Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
+      mutate(tot_abund = sum(Pin_Hits)) %>% #create column for total abundance in each plot
+      filter(rank == max(rank)) %>% #only include most abundant species in each plot
+      summarise(BP_dominance = Pin_Hits/tot_abund) #calculate Berger-Parker dominance index
+    
+    # take the mean dominance across time for each Unique ID
+    mean_dom <- tempdom %>%  ## calculate the average dominance over each time window for each plot
+      group_by(TREATMENT, Unique_ID) %>%
+      summarise(dominance = mean(BP_dominance))
+     
+    ## join all data frames together
+    t <- left_join(stab, synchrony, by = c("Unique_ID"))
+    
+    tt <- left_join(t, mean_dom, by = c("Unique_ID")) %>%
+      mutate(period = dat_type[j], breakpt = bp[i]) ## need variable for pre vs. post and breakpoint
+    
+    ## bind it to the empty output dataframe
+    bp_smech <- rbind(bp_smech, tt)
+    
+  }
+  
+}
+bp_smech <- bp_smech[-1,]
+
+## calculate means for graphing
+mean_breakpoint <- bp_smech %>%
+  group_by(TREATMENT, breakpt, period) %>%
+  summarize(mean_stab = mean(stability), SE_stab = calcSE(stability), mean_syn = mean(synchrony), SE_syn = calcSE(synchrony), mean_dom = mean(dominance), SE_dom = calcSE(dominance))
+
+mean_breakpoint$TREATMENT <- as.factor(mean_breakpoint$TREATMENT)
+
+mean_breakpoint <- mean_breakpoint %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+```
+
+
+## Visualize Stability
+```{r, fig.height=8, fig.width=9}
+ggplot(mean_breakpoint, aes(x = TREATMENT, y = mean_stab)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin= mean_stab-SE_stab, ymax = mean_stab + SE_stab), width = 0.55) +
+  facet_wrap(~breakpt) +
+  geom_point(aes(fill=period), 
+       colour="black",pch=21, size=2) +
+  scale_fill_manual(values = c("#c8c8c8", "#4f4f4f")) +
+  ylab("Stability") + xlab("Treatment")
+
+```
+
+
+```{r, fig.height=5, fig.width=9}
+## there still seem to be outliers on the edges of the time series for the shortest time windows calculated
+## try filtering out 2 more years on the edges
+
+meanbp_filtered <- mean_breakpoint %>%
+  filter(breakpt > "20030601", breakpt < "20160601")
+
+meanbp_filtered$TREATMENT <- as.factor(meanbp_filtered$TREATMENT)
+
+meanbp_filtered <- meanbp_filtered %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+
+ggplot(meanbp_filtered, aes(x = TREATMENT, y = mean_stab)) +
+  geom_point() +
+  geom_errorbar(aes(ymin= mean_stab-SE_stab, ymax = mean_stab + SE_stab), width = 0.55) +
+  facet_wrap(~breakpt, ncol = 6) +
+  geom_point(aes(fill=period), 
+       colour="black",pch=21, size=2) +
+  scale_fill_manual(values = c("#c8c8c8", "#4f4f4f")) +
+  ylab("Stability") + xlab("Treatment") +
+  theme(legend.title = element_text(size=15)) +  theme(text = element_text(size = 15)) + #change font sizes
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r, fig.height=4, fig.width=10}
+
+bp_early <- mean_breakpoint %>%
+  filter(breakpt > "20030601", breakpt < "20100601")
+
+bp_early$TREATMENT <- as.factor(bp_early$TREATMENT)
+
+bp_early <- bp_early %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+
+
+ggplot(bp_early, aes(x = TREATMENT, y = mean_stab)) +
+  geom_point() +
+  geom_errorbar(aes(ymin= mean_stab-SE_stab, ymax = mean_stab + SE_stab), width = 0.55) +
+  facet_wrap(~breakpt, ncol = 6) +
+  geom_point(aes(fill=period), 
+       colour="black",pch=21, size=4) +
+  scale_fill_manual(values = c("#c8c8c8", "#4f4f4f")) +
+  ylab("Stability") + xlab("Treatment") +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) + #change font sizes
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+bp_late <- mean_breakpoint %>%
+  filter(breakpt > "20090601", breakpt < "20160601")
+
+bp_late$TREATMENT <- as.factor(bp_late$TREATMENT)
+
+bp_late <- bp_late %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+
+
+ggplot(bp_late, aes(x = TREATMENT, y = mean_stab)) +
+  geom_point() +
+  geom_errorbar(aes(ymin= mean_stab-SE_stab, ymax = mean_stab + SE_stab), width = 0.55) +
+  facet_wrap(~breakpt, ncol = 6) +
+  geom_point(aes(fill=period), 
+       colour="black",pch=21, size=2.5) +
+  scale_fill_manual(values = c("#c8c8c8", "#4f4f4f")) +
+  ylab("Stability") + xlab("Treatment") +
+  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) + #change font sizes
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+## Visualize Synchrony
+```{r, fig.width=8, fig.height=6}
+ggplot(mean_breakpoint, aes(x = TREATMENT, y = mean_syn)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin= mean_syn-SE_syn, ymax = mean_syn + SE_syn), width = 0.55) +
+  facet_wrap(~breakpt) +
+  geom_point(aes(fill=period), 
+       colour="black",pch=21, size=3) +
+  scale_fill_manual(values = c("#c8c8c8", "#4f4f4f")) +
+  theme(legend.title = element_text(size=15)) +  theme(text = element_text(size = 15)) + #change font sizes
+  ylab("Synchrony") + xlab("Treatment") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+## Visualize Dominance
+```{r, fig.width=8, fig.height=6}
+ggplot(mean_breakpoint, aes(x = TREATMENT, y = mean_dom)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin= mean_dom-SE_dom, ymax = mean_dom + SE_dom), width= 0.55) +
+  facet_wrap(~breakpt) +
+  geom_point(aes(fill=period), 
+       colour="black",pch=21, size=3) +
+  scale_fill_manual(values = c("#c8c8c8", "#4f4f4f")) +
+  theme(legend.title = element_text(size=15)) +  theme(text = element_text(size = 15)) + #change font sizes
+  ylab("Dominance") + xlab("Treatment") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+```{r}
+
+## Calculate community stability pre-06
+pre06stab <- community_stability(pre06, 
+                                time.var = "Date_numeric", 
+                                abundance.var = "Pin_Hits", 
+                                replicate.var = "Unique_ID")
+
+## Calculate community stability post-06
+post06stab <- community_stability(post06, 
+                                time.var = "Date_numeric", 
+                                abundance.var = "Pin_Hits", 
+                                replicate.var = "Unique_ID")
+
+
+pre06stability <- left_join(pre06stab, treats, by = "Unique_ID") %>% 
+  mutate(CV = 1/stability) %>% #calculate the CV by taking the inverse of stability
+  mutate(date = "pre-06")
+
+post06stability <- left_join(post06stab, treats, by = "Unique_ID") %>% 
+  mutate(CV = 1/stability) %>% #calculate the CV by taking the inverse of stability
+  mutate(date = "post-06")
+
+
+
+
+## PRE 2006
+pr6synchrony <- synchrony(
+  pre06,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  metric = "Loreau",
+  replicate.var = "Unique_ID"
+)
+colnames(pr6synchrony) <- c("Unique_ID", "synchrony") #rename columns
+
+pr6big5synchrony <- synchrony(
+  big5pre06,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  metric = "Loreau",
+  replicate.var = "Unique_ID"
+)
+colnames(pr6big5synchrony) <- c("Unique_ID", "big5synchrony") #rename columns
+
+pr6nondomsynchrony <- synchrony(
+  nondompre06,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  metric = "Loreau",
+  replicate.var = "Unique_ID"
+)
+colnames(pr6nondomsynchrony) <- c("Unique_ID", "nondomsynchrony") #rename columns
+
+
+## POST 2006
+pst6synchrony <- synchrony(
+  post06,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  metric = "Loreau",
+  replicate.var = "Unique_ID"
+)
+colnames(pst6synchrony) <- c("Unique_ID", "synchrony") #rename columns
+
+pst6big5synchrony <- synchrony(
+  big5post06,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  metric = "Loreau",
+  replicate.var = "Unique_ID"
+)
+colnames(pst6big5synchrony) <- c("Unique_ID", "big5synchrony") #rename columns
+
+pst6nondomsynchrony <- synchrony(
+  nondompost06,
+  time.var = "Date_numeric",
+  species.var = "SPECIES",
+  abundance.var = "Pin_Hits",
+  metric = "Loreau",
+  replicate.var = "Unique_ID"
+)
+colnames(pst6nondomsynchrony) <- c("Unique_ID", "nondomsynchrony") #rename columns
+
+
+
+## Pre 2006
+## calculate Berger-Parker Dominance for each unique ID at each date
+pr6BP_dominance <- pre06 %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>% #group by treatment, plot, and date
+  mutate(rank = rank(Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
+  mutate(tot_abund = sum(Pin_Hits)) %>% #create column for total abundance in each plot
+  filter(rank == max(rank)) %>% #only include most abundant species in each plot
+  summarise(BP_dominance = Pin_Hits/tot_abund) %>% #calculate Berger-Parker dominance index
+  mutate(date = "pre-06")
+
+## Calculate the mean Berger-Parker dominance by: 
+  ## TREATMENT and UNIQUE ID - to use eventually for linear models
+pr6meanplot_BPdom <- pr6BP_dominance %>%
+  group_by(TREATMENT, Unique_ID) %>%
+  summarize(mean_dom = mean(BP_dominance), SEdom = calcSE(BP_dominance), vardom = var(BP_dominance))
+
+
+## Post 2006
+## calculate Berger-Parker Dominance for each unique ID at each date
+pst6BP_dominance <- post06 %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>% #group by treatment, plot, and date
+  mutate(rank = rank(Pin_Hits, na.last = NA, ties.method = "average")) %>% #rank species in order of abundance
+  mutate(tot_abund = sum(Pin_Hits)) %>% #create column for total abundance in each plot
+  filter(rank == max(rank)) %>% #only include most abundant species in each plot
+  summarise(BP_dominance = Pin_Hits/tot_abund) %>% #calculate Berger-Parker dominance index
+  mutate(date = "post-06")
+
+## Calculate the mean Berger-Parker dominance by: 
+  ## TREATMENT and UNIQUE ID - to use eventually for linear models
+pst6meanplot_BPdom <- pst6BP_dominance %>%
+  group_by(TREATMENT, Unique_ID) %>%
+  summarize(mean_dom = mean(BP_dominance), SEdom = calcSE(BP_dominance), vardom = var(BP_dominance))
+
+
+
+
+## PRE-2006 ----
+## Calculate species richness for each plot at each point in time
+pr6rich <- pre06 %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>% ## group by each plot at each date
+  summarise(richness = n())
+  ## use this dataframe for the ANOVA?
+
+## Calculate the mean richness by: 
+  ## TREATMENT and DATE
+pr6meanannrich <- pr6rich %>%
+  group_by(TREATMENT, Date_final) %>%
+  summarise(meanrich = mean(richness), SErich = calcSE(richness)) %>%
+  mutate(date = "pre-06")
+  ## TREATMENT and UNIQUE_ID
+pr6meanrichplot <- pr6rich %>%
+  group_by(TREATMENT, Unique_ID) %>%
+  summarise(meanrich = mean(richness, SErich = calcSE(richness)), varrich = var(richness)) 
+
+## POST-2006
+## Calculate species richness for each plot at each point in time
+pst6rich <- post06 %>%
+  group_by(TREATMENT, Unique_ID, Date_final) %>% ## group by each plot at each date
+  summarise(richness = n())
+  ## use this dataframe for the ANOVA?
+
+## Calculate the mean richness by: 
+  ## TREATMENT and DATE
+pst6meanannrich <- pst6rich %>%
+  group_by(TREATMENT, Date_final) %>%
+  summarise(meanrich = mean(richness), SErich = calcSE(richness)) %>%
+  mutate(date = "post-06")
+  ## TREATMENT and UNIQUE_ID
+pst6meanrichplot <- pst6rich %>%
+  group_by(TREATMENT, Unique_ID) %>%
+  summarise(meanrich = mean(richness, SErich = calcSE(richness)), varrich = var(richness)) 
+
+
+
+
+## PRE 2006
+pr6synchrony_stability <- left_join(pr6synchrony, pre06stability, by = "Unique_ID") %>%
+  mutate(date = "pre-06")
+pr6ssb5 <- left_join(pr6synchrony_stability, pr6big5synchrony, by = "Unique_ID")
+pr6ssnd <- left_join(pr6ssb5, pr6nondomsynchrony, by = "Unique_ID")
+pr6ssdom <- left_join(pr6ssnd, pr6meanplot_BPdom, by = c("Unique_ID", "TREATMENT"))
+pr6stability_mechanisms <- left_join(pr6ssdom, pr6meanrichplot, by = c("Unique_ID", "TREATMENT"))
+
+
+## POST 2006
+pst6synchrony_stability <- left_join(pst6synchrony, post06stability, by = "Unique_ID") %>%
+  mutate(date = "post-06")
+pst6ssb5 <- left_join(pst6synchrony_stability, pst6big5synchrony, by = "Unique_ID")
+pst6ssnd <- left_join(pst6ssb5, pst6nondomsynchrony, by = "Unique_ID")
+pst6ssdom <- left_join(pst6ssnd, pst6meanplot_BPdom, by = c("Unique_ID", "TREATMENT"))
+pst6stability_mechanisms <- left_join(pst6ssdom, pst6meanrichplot, by = c("Unique_ID", "TREATMENT"))
+
+
+## PRE 2006
+pr6meanstab_mech <- pr6stability_mechanisms %>%
+  group_by(TREATMENT) %>%
+  summarise(mean_st = mean(stability), SE_st = calcSE(stability), mean_syn = mean(synchrony), SE_syn = calcSE(synchrony), 
+            SE_dom = calcSE(mean_dom), mean_dom = mean(mean_dom), mean_rich = mean(meanrich), SE_rich = calcSE(meanrich),
+            b5mean_syn = mean(big5synchrony), b5SE_syn = calcSE(big5synchrony), ndmean_syn = mean(nondomsynchrony), 
+            ndSE_syn = calcSE(nondomsynchrony),  mean_vardom = mean(vardom), SE_vardom = calcSE(vardom), mean_varrich = mean(varrich), 
+            SE_varrich = calcSE(varrich), mean_CV = mean(CV), SE_CV = calcSE(CV))
+
+## POST 2006
+pst6meanstab_mech <- pst6stability_mechanisms %>%
+  group_by(TREATMENT) %>%
+  summarise(mean_st = mean(stability), SE_st = calcSE(stability), mean_syn = mean(synchrony), SE_syn = calcSE(synchrony), 
+            SE_dom = calcSE(mean_dom), mean_dom = mean(mean_dom), mean_rich = mean(meanrich), SE_rich = calcSE(meanrich),
+            b5mean_syn = mean(big5synchrony), b5SE_syn = calcSE(big5synchrony), ndmean_syn = mean(nondomsynchrony), 
+            ndSE_syn = calcSE(nondomsynchrony),
+            mean_vardom = mean(vardom), SE_vardom = calcSE(vardom), mean_varrich = mean(varrich), SE_varrich = calcSE(varrich),
+            mean_CV = mean(CV), SE_CV = calcSE(CV))
+
+
+
+
+
+#stability_mechanisms_all$TREATMENT <- as.factor(stability_mechanisms_all$TREATMENT)
+
+## Combine all time points into one data frame with one value of stability & mechanisms for each treatment
+#meanstab_mech_all <- stability_mechanisms_all %>%
+ # group_by(TREATMENT, date) %>%
+#  summarise(mean_st = mean(stability), SE_st = calcSE(stability), mean_syn = mean(synchrony), SE_syn = calcSE(synchrony), 
+            #SE_dom = calcSE(mean_dom), mean_dom = mean(mean_dom), mean_rich = mean(meanrich), #SE_rich = calcSE(meanrich),
+          #  b5mean_syn = mean(big5synchrony), b5SE_syn = calcSE(big5synchrony), ndmean_syn = mean(nondomsynchrony), 
+         #   ndSE_syn = calcSE(nondomsynchrony),
+        #    mean_vardom = mean(vardom), SE_vardom = calcSE(vardom), mean_varrich = mean(varrich), SE_varrich = calcSE(varrich),
+         #   mean_CV = mean(CV), SE_CV = calcSE(CV)) %>%
+ # mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+```
+
+```{r}
+
+
+## Mixed Effects Models for PRE 2006 Herbivory & Stability/Mechanisms
+```{r}
+## How does herbivore treatment change stability & stability mechanisms?
+  ## use block as a random effect
+
+## Stability by Herbivory Treatment
+fitgrstpr6 <- lmer(stability~TREATMENT + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitgrstpr6)
+
+fitstpr6null <- lmer(stability~1 + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitstpr6null)
+AIC(fitstpr6null)
+AIC(fitgrstpr6)
+## use AIC to compare to model where Tx is taken out
+## diff b/w AIC vals > 2; & lower AIC score is better
+## treatment makes a diff here.
+## do this for each of the models
+
+## for diff b/w tx -> use emmeans 
+emmeans(fitgrstpr6, specs = pairwise ~ TREATMENT)
+
+
+
+## Synchrony by Herbivory Treatment
+fitgrsypr6 <- lmer(synchrony~TREATMENT + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitgrsypr6)
+
+fitsypr6null <- lmer(synchrony~1 + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitsypr6null)
+
+AIC(fitsypr6null)
+AIC(fitgrsypr6)
+## treatment does make a difference here
+
+## difference between treatments
+emmeans(fitgrsypr6, specs = pairwise ~ TREATMENT)
+
+
+
+## Big 5 Synchrony by Herbivory Treatment
+fitgrsyb5pr6 <- lmer(big5synchrony~TREATMENT + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitgrsyb5pr6)
+
+fitsyb5pr6null <- lmer(big5synchrony~1 + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitsyb5pr6null)
+
+AIC(fitsyb5pr6null)
+AIC(fitgrsyb5pr6)
+## What do you do if there's a negative AIC value?
+
+## difference between treatments
+emmeans(fitgrsyb5pr6, specs = pairwise ~ TREATMENT)
+
+
+
+## Subordinate Synchrony by Herbivory Treatment
+fitgrsyndpr6 <- lmer(nondomsynchrony~TREATMENT + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitgrsyb5pr6)
+
+fitsyndpr6null <- lmer(nondomsynchrony~1 + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitsyndnull)
+
+AIC(fitsyndpr6null)
+AIC(fitgrsyndpr6)
+## What do you do if there's a negative AIC value?
+
+## difference between treatments
+emmeans(fitgrsyndpr6, specs = pairwise ~ TREATMENT)
+
+
+
+## Dominance by Herbivory Treatment 
+fitgrdopr6 <- lmer(mean_dom~TREATMENT + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitgrdopr6)
+
+fitdopr6null <- lmer(mean_dom~1 + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitdopr6null)
+AIC(fitgrdopr6)
+AIC(fitdopr6null)
+## What do you do if there's a negative AIC value?
+
+## difference between treatments
+emmeans(fitgrdopr6, specs = pairwise ~ TREATMENT)
+
+
+## Richness by Herbivory Treatment
+fitgrripr6 <- lmer(meanrich~TREATMENT + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitgrripr6)
+
+fitripr6null <- lmer(meanrich~1 + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitripr6null)
+AIC(fitgrripr6)
+AIC(fitripr6null)
+## no difference between null & Treatment model
+
+## difference between treatments
+emmeans(fitgrripr6, specs = pairwise ~ TREATMENT)
+
+
+
+## Variance of Richness by Herbivory Treatment
+fitgrvrpr6 <- lmer(varrich~TREATMENT + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitgrvrpr6)
+
+fitvrpr6null <- lmer(varrich~1 + (1|BLOCK), data = pr6stability_mechanisms)
+summary(fitvrpr6null)
+AIC(fitgrvrpr6)
+AIC(fitvrpr6null)
+## treatment makes a difference 
+
+## difference between treatments
+emmeans(fitgrvrpr6, specs = pairwise ~ TREATMENT)
+
+```
+
+## Mixed Effects Models for POST 2006 Herbivory & Stability/Mechanisms
+```{r}
+## How does herbivore treatment change stability & stability mechanisms?
+  ## use block as a random effect
+
+## Stability by Herbivory Treatment
+fitgrstpst6 <- lmer(stability~TREATMENT + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitgrstpst6)
+
+fitstpst6null <- lmer(stability~1 + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitstpst6null)
+AIC(fitstpst6null)
+AIC(fitgrstpst6)
+## use AIC to compare to model where Tx is taken out
+## diff b/w AIC vals > 2; & lower AIC score is better
+## treatment makes a diff here.
+## do this for each of the models
+
+## for diff b/w tx -> use emmeans 
+emmeans(fitgrstpst6, specs = pairwise ~ TREATMENT)
+
+
+
+## Synchrony by Herbivory Treatment
+fitgrsypst6 <- lmer(synchrony~TREATMENT + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitgrsypst6)
+
+fitsypst6null <- lmer(synchrony~1 + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitsypst6null)
+
+AIC(fitsypst6null)
+AIC(fitgrsypst6)
+## treatment does make a difference here
+
+## difference between treatments
+emmeans(fitgrsypst6, specs = pairwise ~ TREATMENT)
+
+
+
+## Big 5 Synchrony by Herbivory Treatment
+fitgrsyb5pst6 <- lmer(big5synchrony~TREATMENT + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitgrsyb5pst6)
+
+fitsyb5pst6null <- lmer(big5synchrony~1 + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitsyb5pst6null)
+
+AIC(fitsyb5pst6null)
+AIC(fitgrsyb5pst6)
+## What do you do if there's a negative AIC value?
+
+## difference between treatments
+emmeans(fitgrsyb5pst6, specs = pairwise ~ TREATMENT)
+
+
+
+## Subordinate Synchrony by Herbivory Treatment
+fitgrsyndpst6 <- lmer(nondomsynchrony~TREATMENT + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitgrsyb5pst6)
+
+fitsyndpst6null <- lmer(nondomsynchrony~1 + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitsyndpst6null)
+
+AIC(fitsyndpst6null)
+AIC(fitgrsyndpst6)
+## What do you do if there's a negative AIC value?
+
+## difference between treatments
+emmeans(fitgrsyndpst6, specs = pairwise ~ TREATMENT)
+
+
+
+## Dominance by Herbivory Treatment 
+fitgrdopst6 <- lmer(mean_dom~TREATMENT + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitgrdopst6)
+
+fitdopst6null <- lmer(mean_dom~1 + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitdopst6null)
+AIC(fitgrdopst6)
+AIC(fitdopst6null)
+## What do you do if there's a negative AIC value?
+
+## difference between treatments
+emmeans(fitgrdopst6, specs = pairwise ~ TREATMENT)
+
+
+## Richness by Herbivory Treatment
+fitgrripst6 <- lmer(meanrich~TREATMENT + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitgrripst6)
+
+fitripst6null <- lmer(meanrich~1 + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitripst6null)
+AIC(fitgrripst6)
+AIC(fitripst6null)
+## no difference between null & Treatment model
+
+## difference between treatments
+emmeans(fitgrripst6, specs = pairwise ~ TREATMENT)
+
+
+
+## Variance of Richness by Herbivory Treatment
+fitgrvrpst6 <- lmer(varrich~TREATMENT + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitgrvrpst6)
+
+fitvrpst6null <- lmer(varrich~1 + (1|BLOCK), data = pst6stability_mechanisms)
+summary(fitvrpst6null)
+AIC(fitgrvrpst6)
+AIC(fitvrpst6null)
+## treatment makes a difference 
+
+## difference between treatments
+emmeans(fitgrvrpst6, specs = pairwise ~ TREATMENT)
+
+```
+
+
+
+
+## Mixed Effects Models for Stability & Mechanisms (PRE AND POST 2006)
+```{r}
+## Try Stability vs. Mechanism model variations
+## linear mixed effects model in lme4
+
+## PRE 2006 ## 
+## Check whether any factors are highly correlated (above 0.7 wouldn't put in a multiple regression together)
+## Test Correlations b/w variables
+cor.test(pr6stability_mechanisms$mean_dom, pr6stability_mechanisms$synchrony)
+## good
+
+cor.test(pr6stability_mechanisms$meanrich, pr6stability_mechanisms$synchrony)
+## good
+
+cor.test(pr6stability_mechanisms$meanrich, pr6stability_mechanisms$mean_dom)
+## good
+
+## Model with all 3 stability mechanisms included as predictors
+fitstabmechpr6 <- lmer(stability~mean_dom+meanrich+synchrony +(1|BLOCK), data = pr6stability_mechanisms, na.action = "na.fail")
+summary(fitstabmechpr6)
+
+## test to see if the model converges with just synchrony
+fitstabsynpr6 <- lmer(stability~synchrony +(1|BLOCK), data = pr6stability_mechanisms, na.action = "na.fail")
+summary(fitstabsynpr6)
+
+
+## test again to see if any of the predictors are highly correlated using the variance inflation factor
+vif(fitstabmechpr6)
+## reasonably low vif values
+
+## Use the dredge function from the MuMIn package to compare models with all combinations of these predictors, ranked by AIC
+dredge(fitstabmechpr6)
+  ## looks like just synchrony is the most parsimonious model 
+  ## again, dominance and synchrony have the lowest AIC score, 
+  ## but it is less than 2 away from the AIC score of the model with only synchrony
+
+
+## POST 2006 ##
+## Check whether any factors are highly correlated (above 0.7 wouldn't put in a multiple regression together)
+## Test Correlations b/w variables
+cor.test(pst6stability_mechanisms$mean_dom, pst6stability_mechanisms$synchrony)
+## good
+
+cor.test(pst6stability_mechanisms$meanrich, pst6stability_mechanisms$synchrony)
+## good
+
+cor.test(pst6stability_mechanisms$meanrich, pst6stability_mechanisms$mean_dom)
+## good
+
+## Model with all 3 stability mechanisms included as predictors
+fitstabmechpst6 <- lmer(stability~mean_dom+meanrich+synchrony +(1|BLOCK), data = pst6stability_mechanisms, na.action = "na.fail")
+summary(fitstabmechpst6)
+
+## test to see if the model converges with just synchrony
+fitstabsydopst6 <- lmer(stability~mean_dom+synchrony +(1|BLOCK), data = pr6stability_mechanisms, na.action = "na.fail")
+summary(fitstabsydopst6)
+
+
+## test again to see if any of the predictors are highly correlated using the variance inflation factor
+vif(fitstabmechpst6)
+## reasonably low vif values
+
+## Use the dredge function from the MuMIn package to compare models with all combinations of these predictors, ranked by AIC
+dredge(fitstabmechpst6)
+  ## here the model with dominance AND synchrony has the lowest AIC score by > 2
+
+```
+
+
+
+
+## Stability and Mechanisms vs. Herbivory Figure
+#```{r, echo=FALSE, fig.width=10, fig.height=6}
+## create a stability by herbivory figure
+stab <- ggplot(meanstab_mech_all, aes(x=TREATMENT, y=mean_st, color = date)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.2) + #add standard error bars
+  ylab("Stability (mean/sd)") + xlab("") +
+  scale_color_manual(values = colors) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Time Period")
+
+## synchrony by herbivory
+syn <- ggplot(meanstab_mech_all, aes(x=TREATMENT , y=mean_syn, color = date)) +
+  geom_point(size=3) +
+  scale_color_manual(values = colors) + 
+  geom_errorbar(aes(ymin = mean_syn-SE_syn, ymax=mean_syn+SE_syn), width = 0.3) +
+  ylab("Synchrony (All)") + xlab("") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Time Period")
+
+b5syn <- ggplot(meanstab_mech_all, aes(x=TREATMENT , y=b5mean_syn, color = date)) +
+  geom_point(size = 3) +
+  scale_color_manual(values = colors) + 
+  geom_errorbar(aes(ymin = b5mean_syn-b5SE_syn, ymax=b5mean_syn+b5SE_syn), width = 0.3) +
+  ylab("Big 5 Synchrony") + xlab("") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Time Period")
+
+
+ndsyn <- ggplot(meanstab_mech_all, aes(x=TREATMENT , y=ndmean_syn, color = date)) +
+  geom_point(size=3) +
+  scale_color_manual(values = colors) + 
+  geom_errorbar(aes(ymin = ndmean_syn-ndSE_syn, ymax=ndmean_syn+ndSE_syn), width = 0.3) +
+  ylab("ND Synchrony") + xlab("") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Time Period")
+
+## dominance by herbivory
+dom <- ggplot(meanstab_mech_all, aes(x=TREATMENT , y=mean_dom, color = date)) +
+  geom_point(size=3) +
+  scale_color_manual(values = colors) + 
+  geom_errorbar(aes(ymin = mean_dom-SE_dom, ymax=mean_dom+SE_dom), width = 0.3) +
+  ylab("Dominance") + xlab("") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Time Period") 
+
+## richness by herbivory
+rich <- ggplot(meanstab_mech_all, aes(x=TREATMENT , y=mean_rich, color = date)) +
+  geom_point(size=3) +
+  scale_color_manual(values = colors) + 
+  geom_errorbar(aes(ymin = mean_rich-SE_rich, ymax=mean_rich+SE_rich), width = 0.3) +
+  ylab("Richness") + xlab("") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) + #change font sizes
+  labs(col = "Time Period")
+
+ggarrange(stab, dom, rich, syn, b5syn, ndsyn,
+          ncol = 3, nrow = 2,
+          align = "hv",
+          labels = "AUTO",
+          common.legend = TRUE)
+#```
+
+
+## Stability vs. Mechanisms Figure
+#```{r, echo = FALSE, fig.width=10, fig.height=6}
+synstab <- ggplot(meanstab_mech_all, aes(x=mean_syn, y=mean_st, color = date)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.01) +
+  geom_errorbarh(aes(xmin = mean_syn-SE_syn, xmax=mean_syn+SE_syn), height = 0.1) + #add standard error bars
+  scale_color_manual(values = colors) + 
+  ylab("Stability") + xlab("Synchrony (All)") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) #change font sizes
+
+b5synstab <- ggplot(meanstab_mech_all, aes(x=b5mean_syn, y=mean_st, color = date)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.01) +
+  geom_errorbarh(aes(xmin = b5mean_syn-b5SE_syn, xmax=b5mean_syn+b5SE_syn), height = 0.1) + #add standard error bars
+  scale_color_manual(values = colors) + 
+  ylab("Stability") + xlab("Synchrony (Big 5)") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) #change font sizes
+
+ndsynstab <- ggplot(meanstab_mech_all, aes(x=ndmean_syn, y=mean_st, color = date)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.01) +
+  geom_errorbarh(aes(xmin = ndmean_syn-ndSE_syn, xmax=ndmean_syn+ndSE_syn), height = 0.1) + #add standard error bars
+  scale_color_manual(values = colors) + 
+  ylab("Stability") + xlab("Synchrony (ND)") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) #change font sizes
+
+domstab <- ggplot(meanstab_mech_all, aes(x=mean_dom, y=mean_st, color = date)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.01) +
+  geom_errorbarh(aes(xmin = mean_dom-SE_dom, xmax=mean_dom+SE_dom), height = 0.1) + #add standard error bars
+  scale_color_manual(values = colors) + 
+  ylab("Stability") + xlab("Dominance") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) #change font sizes
+
+richstab <- ggplot(meanstab_mech_all, aes(x=mean_rich, y=mean_st, color = date)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.01) +
+  geom_errorbarh(aes(xmin = mean_rich-SE_rich, xmax=mean_rich+SE_rich), height = 0.1) + #add standard error bars
+  scale_color_manual(values = colors) + 
+  ylab("Stability") + xlab("Richness") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 14)) #change font sizes
+
+ggarrange(synstab, b5synstab, ndsynstab, domstab, richstab,
+          ncol = 3, nrow = 2,
+          align = "hv",
+          labels = "AUTO",
+          common.legend = TRUE)
+
+#```
+
+
+## Variance difference by time period
+#```{r, echo=FALSE, fig.width=8, fig.height=4}
+domvar <- ggplot(meanstab_mech_all, aes(x=TREATMENT, y=mean_vardom, color = date)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_vardom-SE_vardom, ymax = mean_vardom+SE_vardom), width = 0.2)+
+  ylab("Variance of BP Dominance through Time") + xlab("") +
+  scale_color_manual(values = colors)
+
+richvar <- ggplot(meanstab_mech_all, aes(x=TREATMENT, y=mean_varrich, color = date)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_varrich-SE_varrich, ymax = mean_varrich+SE_varrich), width = 0.2)+
+  ylab("Variance of Richness through Time") + xlab("") +
+  scale_color_manual(values = colors)
+
+ggarrange(dom, rich, ncol = 2, align = "hv", 
+          common.legend = TRUE)
+#```
+
+
