@@ -1,3 +1,95 @@
+#```{r}
+## use the droughts identified currently - but email Kari, Corinna, etc. for their drought years & calcs to verify
+## need to determine which windows contain the particular drought years and code as 0 = no drought and 1 = drought
+
+
+## create drought MW ID function
+droughtIDfunc <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+  
+  ## number of sampling points
+  n_samples <- length(unique(pptcondition$Year)) 
+  
+  ## number of windows to iterate over
+  n_windows <- n_samples - timestep + 1  
+  
+  ## create ordered list of sample points
+  sample_points <- sort(unique(input_data$Year)) 
+  
+  ## create dataframe to contain output
+  drought_flags <- as.data.frame(matrix(nrow = n_windows, ncol = 2))
+  
+  ## rename columns
+  colnames(drought_flags) <- c("timestep", "drought_in_window")
+  
+  ## set default values of drought_flags 
+  drought_flags$timestep <- c(1:n_windows)
+  drought_flags$drought_in_window <- 0
+  
+  ## iterate over every window in the time series
+  for (i in 1:n_windows){
+    
+    ## create a vector of sample points for each iteration
+    temp_samplepts <- sample_points[i:(i+timestep-1)] 
+    
+    ## filter the correct sample points from input data
+    temp <- input_data %>%
+      filter(Year %in% temp_samplepts)  
+    
+    ## set default value of drought in window to FALSE
+    drought_in_window <- FALSE
+    
+    
+    ## iterate through each date in the window
+    for (j in 1:length(temp$Date_final)){
+      
+      ## if there is a drought at any date, set the drought_in_window value to TRUE
+      if(temp[j,]$condition == "dry") {
+        drought_in_window <- TRUE
+      } 
+    }
+    
+    ## if a drought is flagged anywhere in the window, set the value in drought_flags dataframe to 1 for the respective window
+    if(drought_in_window == TRUE){
+      drought_flags[i,]$drought_in_window <- 1
+    }
+    
+  }
+  
+  return(drought_flags) ## retrieve data frame at the end
+  
+}
+
+
+## calculate whether there is a drought in every 3 year window
+drought3 <- droughtIDfunc(input_data = pptcondition, timestep = 3)
+
+## match this up with stability 3yr moving window data
+stabmw3 <- stab_mw_tx %>%
+  filter(window_size == "3")
+
+stdrought3 <- left_join(stabmw3, drought3, by = "timestep")
+
+stdrought3$drought_in_window <- as.factor(stdrought3$drought_in_window)
+
+ggplot(stdrought3, aes(x=timestep, y=mean_stability, color = TREATMENT, shape = drought_in_window)) +
+  #geom_line() +
+  geom_point() +
+  facet_wrap(~TREATMENT)
+
+
+## This approach works, but droughts are frequent enough that unless the window size is very small, every window will incorporate a drought. Thus, need more information about specific droughts or drought relevance (position in the window)
+
+
+
+
+
+
+
+
+
+
+
+
 ## Moving Window Correlation Analysis
 ```{r}
 stab_syn_mw$TREATMENT <- as.factor(stab_syn_mw$TREATMENT) #change treatment to factor
