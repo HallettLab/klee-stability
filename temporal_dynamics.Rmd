@@ -409,17 +409,26 @@ summary(fitcvrh)
 fitcvrh
 dredge(fitcvrh)
 
+fitcvr_best <- lmer(classicVR~cows+mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
+summary(fitcvr_best)
+
 ## how is dominant species population stability predicted by varying groups of herbivores?
 fitdpsh <- lmer(meanpopstab~cows+wildlife+mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
 summary(fitdpsh)
 fitdpsh
 dredge(fitdpsh)
 
+fitdpsh_best <- lmer(meanpopstab~1 + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
+summary(fitdpsh_best)
+
 ## how is richness predicted by varying groups of herbivores?
 fitrih <- lmer(meanrich~cows+wildlife+mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
 summary(fitrih)
 fitrih
 dredge(fitrih)
+
+fitrih_best <- lmer(meanrich~1 + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
+summary(fitrih_best)
 ```
 
 ## Mixed Effects Models: Herbivory & Stability/Mechanisms

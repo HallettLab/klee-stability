@@ -1094,6 +1094,7 @@ dredge(fitdrri5)
 
 ### Do drought, herbivore treatment, or biotic mechanisms predict stability?
 ```{r}
+## 10 Years ##
 ## first, need to combine data into the one dataframe
 j <- left_join(drst10yr, drcvr10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
   select(-SE, -SE_cVR)
@@ -1104,12 +1105,29 @@ jj <- left_join(j, drpopst10yr, by = c("TREATMENT", "timestep", "window_size", "
 stabmechmw10 <- left_join(jj, drrich10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
   select(-SE_rich)
 
-
+## Model 
 fitstall <- lmer(mean_stability ~ Dscore+mega+cows+wildlife+mean_cVR+avgpopstab+mean_rich+(1|BLOCK), data = stabmechmw10, na.action = "na.fail")
 summary(fitstall)
 dredge(fitstall)
 
-rm(list = c("j", "jj"))
+
+## 5 Years ## 
+## first, need to combine data into the one dataframe
+j5 <- left_join(drst5yr, drcvr5yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
+  select(-SE, -SE_cVR)
+
+jj5 <- left_join(j5, drpopst5yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
+  select(-SE_popst)
+
+stabmechmw5 <- left_join(jj5, drrich5yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
+  select(-SE_rich)
+
+
+fitstall5 <- lmer(mean_stability ~ Dscore+mega+cows+wildlife+mean_cVR+avgpopstab+mean_rich+(1|BLOCK), data = stabmechmw5, na.action = "na.fail")
+summary(fitstall)
+dredge(fitstall)
+
+rm(list = c("j", "jj", "j5", "jj5"))
 ```
 
 
@@ -1117,12 +1135,6 @@ rm(list = c("j", "jj"))
 # Figure Settings
 ```{r, echo=FALSE, include=FALSE}
 theme_set(theme_classic()) #set the theme
-
-corrfigVRstdr5 <- left_join(stdr5, mw5cvrstabfig, by = c("TREATMENT", "timestep", "window_size", "mean_stability", "SE"))
-
-
-corrfigVRstdr10 <- left_join(stdr10, mw10cvrstabfig, by = c("TREATMENT", "timestep", "window_size", "mean_stability", "SE"))
-
 ```
 
 
@@ -1329,55 +1341,69 @@ ggarrange(st, cvr, pst, ri,
 
 ## Figure 5: Correlations
 ```{r, fig.width=7, fig.height=4}
-w10 <- ggplot(corrfigVRstdr10, aes(x=mean_cVR, y=mean_stability, color = TREATMENT)) +
+w10 <- ggplot(figdrst, aes(x=cVR, y=stability)) +
   geom_point() +
   ylab("Stability (10yr)") + xlab("Classic Variance Ratio (10yr)") +
-  #facet_wrap(~TREATMENT, ncol = 6) +
   theme(legend.title = element_text(size=11)) +  theme(text = element_text(size = 11)) + 
-  coord_cartesian(xlim = c(0.5,4.5)) +
- # geom_smooth(method = "lm", color = "black", fullrange = T, se = FALSE) +
+  coord_cartesian(xlim = c(0.5,4.5), ylim = c(2.5,12.6)) +
+  geom_smooth(method = "lm", fullrange = T, se = FALSE, mapping = aes(color = TREATMENT), alpha = 0.75) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
   geom_point(aes(fill=TREATMENT), 
              colour="black",pch=21, size=2.5) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
- # labs(fill = "D Score") +
   scale_color_scico_d(palette = "batlow", direction = -1) +
   theme(legend.position = "right") +
-  geom_abline(slope = -0.6999, intercept = 5.1816, col = "#001959", size = 1.25)+ ## MWC
-  geom_abline(slope = -0.4569, intercept = 4.3097, col = "#184E60", size = 1.25)+ ## WC
-  geom_abline(slope = -1.1447, intercept = 6.6234, col = "#B28C32", size = 1.25)+ ## MW
-  geom_abline(slope = -0.9459, intercept = 6.711, col = "#FCA68C", size = 1.25) + ## W
-  geom_vline(xintercept = 1, linetype = "dashed")
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.25)
 
+## Make data frame of means first
+figdrst5 <- stabmechmw5 %>%
+  group_by(timestep, TREATMENT) %>%
+  summarize(Dscore = mean(Dscore), stability = mean(mean_stability), cVR = mean(mean_cVR), popstab = mean(avgpopstab),
+            richness = mean(mean_rich))
 
-w5 <- ggplot(corrfigVRstdr5, aes(x=mean_cVR, y=mean_stability, color = TREATMENT)) +
+w5 <- ggplot(figdrst5, aes(x=cVR, y=stability)) +
   geom_point() +
   ylab("Stability (5yr)") + xlab("Classic Variance Ratio (5yr)") +
-  #facet_wrap(~TREATMENT, ncol = 6) +
   theme(legend.title = element_text(size=11)) +  theme(text = element_text(size = 11)) + 
-  coord_cartesian(xlim = c(0.5,4.5)) +
-  #geom_smooth(method = "lm", color = "black", fullrange = T, se = FALSE) +
+  coord_cartesian(xlim = c(0.5,4.5), ylim = c(2.5,12.6)) +
+  geom_smooth(method = "lm", fullrange = T, se = FALSE, mapping = aes(color = TREATMENT), alpha = 0.75) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
   geom_point(aes(fill=TREATMENT), 
              colour="black",pch=21, size=2.5) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
-  #labs(fill = "D Score") +
   theme(legend.position = "right") +
-  geom_abline(slope = -0.9450, intercept = 6.6964, col = "#001959", size = 1.25)+ ## MWC
-  geom_abline(slope = -1.0423, intercept = 6.6313, col = "#184E60", size = 1.25)+ ## WC
-  geom_abline(slope = -0.9184, intercept = 6.9054, col = "#577646", size = 1.25) +## C
-  geom_abline(slope = -1.7615, intercept = 9.2306, col = "#B28C32", size = 1.25)+ ## MW
-  geom_abline(slope = -1.9927, intercept = 9.7876, col = "#FCA68C", size = 1.25)+ ## W
-  geom_abline(slope = -2.9891, intercept = 12.3635, col = "#F9CCF9", size = 1.25) + ## O
-  geom_vline(xintercept = 1, linetype = "dashed")
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.25)
 
 
 ggarrange(w5, w10, common.legend = TRUE, legend = "bottom", 
           labels = "AUTO")
 ```
+```{r, fig.height=4, fig.width=9.5}
 
-## Figure 6: One Dscore-stability - cvr regression figure
-```{r, fig.height=4, fig.width=6.5}
+## Calculate Community Stability for all years
+commstab <- community_stability(klee_annual, 
+                                time.var = "Date_numeric", 
+                                abundance.var = "Pin_Hits", 
+                                replicate.var = "Unique_ID")
 
-sdreg <- ggplot(drst10yr, aes(x=Dscore, y=mean_stability, color = TREATMENT)) +
+## join stability measures with treatment info & calculate CV
+stab <- left_join(commstab, treats, by = "Unique_ID") %>% #join comm stability with treatment info
+  mutate(CV = 1/stability) %>% #calculate the CV as inverse of stability
+  group_by(TREATMENT) %>%
+  summarize(mean_st = mean(stability), SE_st = calcSE(stability))
+
+
+s <- ggplot(stab, aes(x=TREATMENT, y=mean_st)) +
+  geom_point(size=3) +
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.2) + #add standard error bars
+  ylab("Stability (full timeseries)") + xlab("Treatment") + #label axes
+  theme(text = element_text(size = 12))
+
+sdreg <- ggplot(figdrst, aes(x=Dscore, y=stability)) +
   geom_point() +
   ylab("Stability (10yr)") + xlab("Drought Score") +
   geom_point(aes(fill=TREATMENT), 
@@ -1385,15 +1411,47 @@ sdreg <- ggplot(drst10yr, aes(x=Dscore, y=mean_stability, color = TREATMENT)) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
   scale_color_scico_d(palette = "batlow", direction = -1) +
   theme(legend.position = "right") +
-  geom_abline(slope = -4.8525, intercept = 4.2041, col = "#001959", size = 1.25, linetype = "dashed")+ ## MWC
-  geom_abline(slope = -5.0731, intercept = 3.9103, col = "#184E60", size = 1.25)+ ## WC
-  geom_abline(slope = -6.2802, intercept = 4.9581, col = "#577646", size = 1.25, linetype = "dashed") +## C
-  geom_abline(slope = -11.4896, intercept = 5.9863, col = "#B28C32", size = 1.25)+ ## MW
-  geom_abline(slope = -11.5890, intercept = 6.9418, col = "#FCA68C", size = 1.25)+ ## W
-  geom_abline(slope = -12.0943, intercept = 7.6541, col = "#F9CCF9", size = 1.25, linetype = "dashed") ## O
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.25) +
+  theme(text = element_text(size = 12)) +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            aes(color = TREATMENT),
+            size = 0.75, 
+            alpha = 0.5)
+
+sdreg5 <- ggplot(figdrst5, aes(x=Dscore, y=stability)) +
+  geom_point() +
+  ylab("Stability (5yr)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.25) +
+  theme(text = element_text(size = 12)) +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            aes(color = TREATMENT),
+            size = 0.75, 
+            alpha = 0.5)
+
+ggarrange(s, sdreg5, sdreg, 
+          ncol = 3, nrow = 1, 
+          common.legend = TRUE, 
+          legend = "bottom", 
+          align = "hv", 
+          labels = "AUTO")
+
+```
 
 
-vrdreg <- ggplot(drcvr10yr, aes(x=Dscore, y=mean_cVR, color = TREATMENT)) +
+
+## Figure 6: One Dscore-stability - cvr regression figure
+```{r, fig.height=3.75, fig.width=8.5}
+
+
+
+vrdreg <- ggplot(figdrst, aes(x=Dscore, y=cVR, color = TREATMENT)) +
   geom_point() +
   ylab("Variance Ratio (10yr)") + xlab("Drought Score") +
   geom_point(aes(fill=TREATMENT), 
@@ -1401,21 +1459,59 @@ vrdreg <- ggplot(drcvr10yr, aes(x=Dscore, y=mean_cVR, color = TREATMENT)) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
   scale_color_scico_d(palette = "batlow", direction = -1) +
   theme(legend.position = "right") +
-  geom_abline(slope = 5.4930, intercept = 1.5978, col = "#001959", size = 1.25, linetype = "dashed")+ ## MWC
-  geom_abline(slope = 9.7097, intercept = 1.0687, col = "#184E60", size = 1.25)+ ## WC
-  geom_abline(slope = 4.7049, intercept = 1.1697, col = "#577646", size = 1.25, linetype = "dashed") +## C
-  geom_abline(slope = 6.5217, intercept = 1.0477, col = "#B28C32", size = 1.25) + ## MW
-  geom_hline(yintercept = 1, linetype = "dashed")
-  #geom_abline(slope = -11.5890, intercept = 6.9418, col = "#FCA68C", size = 1)#+ ## W
-  #geom_abline(slope = -12.0943, intercept = 7.6541, col = "#F9CCF9", size = 1, linetype = "dashed") ## O
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1) +
+ # geom_abline(slope = 5.4930, intercept = 1.5978, col = "#001959", size = 1.25, linetype = "dashed")+ ## MWC
+ # geom_abline(slope = 9.7097, intercept = 1.0687, col = "#184E60", size = 1.25)+ ## WC
+  #geom_abline(slope = 4.7049, intercept = 1.1697, col = "#577646", size = 1.25, linetype = "dashed") +## C
+  #geom_abline(slope = 6.5217, intercept = 1.0477, col = "#B28C32", size = 1.25) + ## MW
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1) 
 
-ggarrange(sdreg, vrdreg, 
-          ncol = 2, nrow = 1, 
+
+psdreg <- ggplot(figdrst, aes(x=Dscore, y=popstab, color = TREATMENT)) +
+  geom_point() +
+  ylab("Population Stability (10yr)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1) 
+
+ridreg <- ggplot(figdrst, aes(x=Dscore, y=richness, color = TREATMENT)) +
+  geom_point() +
+  ylab("Species Richness (10yr)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1) 
+
+ggplot(figdrst5, aes(x=Dscore, y=richness, color = TREATMENT)) +
+  geom_point() +
+  ylab("Species Richness (5yr)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1) 
+ 
+
+ggarrange(vrdreg, psdreg, ridreg,
+          ncol = 3, nrow = 1, 
           common.legend = TRUE, 
           legend = "bottom", 
           align = "hv", 
           labels = "AUTO")
 ```
+
 
 ## Figure S4: Stability & Mechanisms by Timescale 
 ```{r, echo = FALSE, fig.width=9.5, fig.height=4}
