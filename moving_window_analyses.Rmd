@@ -17,21 +17,27 @@ library(codyn)
 library(tsvr)
 library(forcats)
 library(knitr)
-library(ggpubr)
+#library(ggpubr)
 library(data.table)
 library(segmented)
-library(breakpoint)
+#library(breakpoint)
 library(ggrepel)
 library(lme4)
 library(scico)
-library(emmeans)
-library(cowplot)
-library(magick)
+#library(emmeans)
+#library(cowplot)
+#library(magick)
 library(MuMIn)
+library(lavaan)
+library(piecewiseSEM)
+library(multcompView)
 
 ## source cleaned data
 source("klee_allyears_cleaning.R")
 source("precipitation_data_cleaning.R")
+sm <- read.csv("stability_mechanisms.csv")
+msm <- read.csv("mean_stability_mech.csv")
+vrplot <- read.csv("VR_plotting.csv")
 
 ## change Treatment to factor in all dataframes
 avg_biomass$TREATMENT <- as.factor(avg_biomass$TREATMENT)
@@ -39,6 +45,8 @@ big5annual$TREATMENT <- as.factor(big5annual$TREATMENT)
 klee_annual$TREATMENT <- as.factor(klee_annual$TREATMENT)
 totcov$TREATMENT <- as.factor(totcov$TREATMENT)
 treats$TREATMENT <- as.factor(treats$TREATMENT)
+msm$TREATMENT <- as.factor(msm$TREATMENT)
+vrplot$TREATMENT <- as.factor(vrplot$TREATMENT)
 
 ## Change treatment to an ordered factor
 klee_annual <- klee_annual %>%
@@ -51,6 +59,11 @@ totcov <- totcov %>%
   mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
 treats <- treats %>%
   mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+msm <- msm %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+vrplot <- vrplot %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+
 ```
 
 # Calculations
@@ -110,9 +123,9 @@ for(i in 1:length(mw_size)){
 mwstability <- mwstability[-1,]
 
 ## join with treatment information and calculate the mean stability by treatment at each time step
-stab_mw_tx <- left_join(mwstability, treats, by="Unique_ID") %>%
-  group_by(TREATMENT, timestep, window_size, BLOCK) %>%
-  summarize(mean_stability = mean(stability), SE = calcSE(stability))
+stab_mw_tx <- left_join(mwstability, treats, by="Unique_ID") #%>%
+  #group_by(TREATMENT, timestep, window_size, BLOCK, Unique_ID) %>%
+  #summarize(mean_stability = mean(stability), SE = calcSE(stability))
 
 ## calculate the mean stability for each treatment by window size
 mean_mwstab <- left_join(mwstability, treats, by="Unique_ID") %>%
@@ -234,9 +247,9 @@ for(i in 1:length(mw_size)){
 mw_classicVR <- mw_classicVR[-1,]
 
 ## calculate the mean classic VR at each timestep
-cVR_mw_tx <- left_join(mw_classicVR, treats, by="Unique_ID") %>%
-  group_by(TREATMENT, timestep, window_size, BLOCK) %>%
-  summarize(mean_cVR = mean(classicVR), SE_cVR = calcSE(classicVR))
+cVR_mw_tx <- left_join(mw_classicVR, treats, by="Unique_ID") #%>%
+  #group_by(TREATMENT, timestep, window_size, BLOCK) %>%
+  #summarize(mean_cVR = mean(classicVR), SE_cVR = calcSE(classicVR))
 
 ## calculate the mean classic VR for each treatment at each window size
 mean_mwcVR <- left_join(mw_classicVR, treats, by="Unique_ID") %>%
@@ -302,19 +315,15 @@ mwspstab <- mwspstab[-1,]
 popst_mw_tx <- left_join(mwspstab, treats, by = "Unique_ID") %>%
   filter(!is.na(popstability), popstability != "Inf") %>% ## some occurrences of sp stability are NA or Inf
   group_by(TREATMENT, Unique_ID, timestep, window_size, BLOCK) %>%
-  summarize(mean_popst = mean(popstability)) %>%
-  group_by(TREATMENT, window_size, timestep, BLOCK) %>%
-  summarise(avgpopstab = mean(mean_popst), SE_popst = calcSE(mean_popst))
+  summarize(mean_popst = mean(popstability)) # %>%
+  #group_by(TREATMENT, window_size, timestep, BLOCK) %>%
+  #summarise(avgpopstab = mean(mean_popst), SE_popst = calcSE(mean_popst))
 
 ## change treatment to a factor & reorder
 popst_mw_tx$TREATMENT <- as.factor(popst_mw_tx$TREATMENT)
 popst_mw_tx <- popst_mw_tx %>%
   mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
 
-## exploratory plot
-ggplot(popst_mw_tx, aes(x=timestep, y=avgpopstab, color = TREATMENT)) +
-  geom_line() +
-  facet_wrap(~window_size)
 
 ## Calculate average dom species stability by treatment
 mean_mwpopst <-  left_join(mwspstab, treats, by = "Unique_ID") %>%
@@ -393,8 +402,8 @@ mwrichness <- mwrichness %>%
 
 ## calculate the mean richness at each time step
 rich_mw_tx <- left_join(mwrichness, treats, by = c("Unique_ID", "TREATMENT")) %>%
-  group_by(TREATMENT, timestep, window_size, BLOCK) %>%
-  summarize(mean_rich = mean(richness), SE_rich = calcSE(richness)) %>%
+ # group_by(TREATMENT, timestep, window_size, BLOCK) %>%
+  #summarize(mean_rich = mean(richness), SE_rich = calcSE(richness)) %>%
   filter(!is.na(TREATMENT))
 
 ## change treatment to a factor & reorder
@@ -694,6 +703,15 @@ richmw5 <- rich_mw_tx %>%
   filter(window_size == "5")
 richmw10 <- rich_mw_tx %>%
   filter(window_size == "10")
+
+## make one data frame to export and use for SEM tests
+jk <- left_join(stabmw10, cvrmw10, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
+jk2 <- left_join(jk, spstmw10, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
+jk3 <- left_join(jk2, richmw10, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size")) 
+mw10all <- left_join(jk3, dscore10, by = "timestep")
+
+
+write.csv(mw10all, file = "mw_forSEM.csv")
 ```
 
 
@@ -735,7 +753,7 @@ for (i in 1:length(trt)) {
       filter(window_size %in% wind)
     
     ## feed through cor.test function
-    cortst <- cor.test(tempw$mean_cVR, tempw$mean_stability, 
+    cortst <- cor.test(tempw$classicVR, tempw$stability, 
              alternative = "two.sided", 
              method = "pearson")
     
@@ -796,7 +814,7 @@ for (i in 1:length(trt)) {
       filter(window_size %in% wind)
     
     ## feed through cor.test function
-    cortst <- cor.test(tempw$mean_rich, tempw$mean_stability, 
+    cortst <- cor.test(tempw$richness, tempw$stability, 
              alternative = "two.sided", 
              method = "pearson")
     
@@ -858,7 +876,7 @@ for (i in 1:length(trt)) {
       filter(window_size %in% wind)
     
     ## feed through cor.test function
-    cortst <- cor.test(tempw$avgpopstab, tempw$mean_stability, 
+    cortst <- cor.test(tempw$mean_popst, tempw$stability, 
              alternative = "two.sided", 
              method = "pearson")
     
@@ -891,7 +909,7 @@ print(corr_popst)
 ```{r}
 ## join drought and stability moving window dataframes (10 year)
 drst10yr <- left_join(dscore10, stabmw10, by = "timestep") %>%
-  mutate(stability_diff = mean_stability - lead(mean_stability, default = NA, order_by = timestep))
+  mutate(stability_diff = stability - lead(stability, default = NA, order_by = timestep))
 
 ## add columns identifying which herbivore groups were present
 drst10yr$cows <- 0
@@ -899,8 +917,8 @@ drst10yr$cows[drst10yr$TREATMENT %in% c('C','WC', 'MWC')] <- 1
 drst10yr$cows <- factor(drst10yr$cows)
 
 drst10yr$wildlife <- 0
-drst10yr$wildlife[drst10yr$TREATMENT %in% c('W','WC')] <- 1
-drst10yr$wildlife[drst10yr$TREATMENT %in% c('MW','MWC')] <- 2
+drst10yr$wildlife[drst10yr$TREATMENT %in% c('W','WC', 'MW', 'MWC')] <- 1
+#drst10yr$wildlife[drst10yr$TREATMENT %in% c('MW','MWC')] <- 2
 drst10yr$wildlife <- factor(drst10yr$wildlife)
 
 drst10yr$mega <- 0
@@ -908,15 +926,20 @@ drst10yr$mega[drst10yr$TREATMENT %in% c('MW','MWC')] <- 1
 drst10yr$mega <- factor(drst10yr$mega)
 
 ## MODEL ##
-fitdrst <- lmer(mean_stability~Dscore+cows+wildlife+mega + (1|BLOCK), data = drst10yr, na.action = "na.fail")
+## fitdrst <- lmer(mean_stability~Dscore*cows+ Dscore*wildlife+ Dscore*mega + (1|BLOCK), data = drst10yr, na.action = "na.fail")
+fitdrst <- lmer(stability~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = drst10yr, na.action = "na.fail")
 summary(fitdrst)
-dredge(fitdrst)
+fitdrst_dredge <- dredge(fitdrst)
 
+fitdrst_dredge[1,] ## pull out first model somehow
+
+fitdrst_best <- lmer(stability~Dscore+cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = drst10yr, na.action = "na.fail")
+summary(fitdrst_best)
 
 
 ## join drought and stability moving window dataframes (5 year)
 drst5yr <- left_join(dscore5, stabmw5, by = "timestep") %>%
-  mutate(stability_diff = mean_stability - lead(mean_stability, default = NA, order_by = timestep))
+  mutate(stability_diff = stability - lead(stability, default = NA, order_by = timestep))
 
 ## add columns identifying which herbivore groups were present
 drst5yr$cows <- 0
@@ -924,8 +947,8 @@ drst5yr$cows[drst5yr$TREATMENT %in% c('C','WC', 'MWC')] <- 1
 drst5yr$cows <- factor(drst5yr$cows)
 
 drst5yr$wildlife <- 0
-drst5yr$wildlife[drst5yr$TREATMENT %in% c('W','WC')] <- 1
-drst5yr$wildlife[drst5yr$TREATMENT %in% c('MW','MWC')] <- 2
+drst5yr$wildlife[drst5yr$TREATMENT %in% c('W','WC','MW','MWC')] <- 1
+#drst5yr$wildlife[drst5yr$TREATMENT %in% c('MW','MWC')] <- 2
 drst5yr$wildlife <- factor(drst5yr$wildlife)
 
 drst5yr$mega <- 0
@@ -933,9 +956,12 @@ drst5yr$mega[drst5yr$TREATMENT %in% c('MW','MWC')] <- 1
 drst5yr$mega <- factor(drst5yr$mega)
 
 ## MODEL ##
-fitdrst <- lmer(mean_stability~Dscore+cows+wildlife+mega + (1|BLOCK), data = drst5yr, na.action = "na.fail")
-summary(fitdrst)
-dredge(fitdrst)
+fitdrst5 <- lmer(stability~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = drst5yr, na.action = "na.fail")
+summary(fitdrst5)
+dredge(fitdrst5)
+
+fitdrst5_best <- lmer(stability~Dscore+cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = drst5yr, na.action = "na.fail")
+summary(fitdrst5_best)
 
 ```
 
@@ -943,7 +969,7 @@ dredge(fitdrst)
 ```{r}
 ## Variance Ratio - 10 Years ##
 drcvr10yr <- left_join(dscore10, cvrmw10, by = "timestep") %>%
-  mutate(cVR_diff = mean_cVR - lead(mean_cVR, default = NA, order_by = timestep))
+  mutate(cVR_diff = classicVR - lead(classicVR, default = NA, order_by = timestep))
 
 ## add columns identifying which herbivore groups were present
 drcvr10yr$cows <- 0
@@ -951,8 +977,8 @@ drcvr10yr$cows[drcvr10yr$TREATMENT %in% c('C','WC', 'MWC')] <- 1
 drcvr10yr$cows <- factor(drcvr10yr$cows)
 
 drcvr10yr$wildlife <- 0
-drcvr10yr$wildlife[drcvr10yr$TREATMENT %in% c('W','WC')] <- 1
-drcvr10yr$wildlife[drcvr10yr$TREATMENT %in% c('MW','MWC')] <- 2
+drcvr10yr$wildlife[drcvr10yr$TREATMENT %in% c('W','WC','MW','MWC')] <- 1
+#drcvr10yr$wildlife[drcvr10yr$TREATMENT %in% c('MW','MWC')] <- 2
 drcvr10yr$wildlife <- factor(drcvr10yr$wildlife)
 
 drcvr10yr$mega <- 0
@@ -960,14 +986,16 @@ drcvr10yr$mega[drcvr10yr$TREATMENT %in% c('MW','MWC')] <- 1
 drcvr10yr$mega <- factor(drcvr10yr$mega)
 
 ## MODEL ##
-fitdrcvr <- lmer(mean_cVR~Dscore+cows+wildlife+mega + (1|BLOCK), data = drcvr10yr, na.action = "na.fail")
+fitdrcvr <- lmer(classicVR~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = drcvr10yr, na.action = "na.fail")
 summary(fitdrcvr)
 dredge(fitdrcvr)
 
+fitdrcvr_best <- lmer(classicVR~Dscore+cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = drcvr10yr, na.action = "na.fail")
+summary(fitdrcvr_best)
 
 ## Variance Ratio - 5 Years ##
 drcvr5yr <- left_join(dscore5, cvrmw5, by = "timestep") %>%
-  mutate(cVR_diff = mean_cVR - lead(mean_cVR, default = NA, order_by = timestep))
+  mutate(cVR_diff = classicVR - lead(classicVR, default = NA, order_by = timestep))
 
 ## add columns identifying which herbivore groups were present
 drcvr5yr$cows <- 0
@@ -975,8 +1003,8 @@ drcvr5yr$cows[drcvr5yr$TREATMENT %in% c('C','WC', 'MWC')] <- 1
 drcvr5yr$cows <- factor(drcvr5yr$cows)
 
 drcvr5yr$wildlife <- 0
-drcvr5yr$wildlife[drcvr5yr$TREATMENT %in% c('W','WC')] <- 1
-drcvr5yr$wildlife[drcvr5yr$TREATMENT %in% c('MW','MWC')] <- 2
+drcvr5yr$wildlife[drcvr5yr$TREATMENT %in% c('W','WC','MW','MWC')] <- 1
+#drcvr5yr$wildlife[drcvr5yr$TREATMENT %in% c('MW','MWC')] <- 2
 drcvr5yr$wildlife <- factor(drcvr5yr$wildlife)
 
 drcvr5yr$mega <- 0
@@ -984,7 +1012,7 @@ drcvr5yr$mega[drcvr5yr$TREATMENT %in% c('MW','MWC')] <- 1
 drcvr5yr$mega <- factor(drcvr5yr$mega)
 
 ## MODEL ##
-fitdrcvr5 <- lmer(mean_cVR~Dscore+cows+wildlife+mega + (1|BLOCK), data = drcvr5yr, na.action = "na.fail")
+fitdrcvr5 <- lmer(classicVR~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = drcvr5yr, na.action = "na.fail")
 summary(fitdrcvr5)
 dredge(fitdrcvr5)
 
@@ -993,7 +1021,7 @@ dredge(fitdrcvr5)
 
 ## Population Stability - 10 Years ##
 drpopst10yr <- left_join(dscore10, spstmw10, by = "timestep") %>%
-  mutate(popst_diff = avgpopstab - lead(avgpopstab, default = NA, order_by = timestep))
+  mutate(popst_diff = mean_popst - lead(mean_popst, default = NA, order_by = timestep))
 
 ## add columns identifying which herbivore groups were present
 drpopst10yr$cows <- 0
@@ -1001,8 +1029,8 @@ drpopst10yr$cows[drpopst10yr$TREATMENT %in% c('C','WC', 'MWC')] <- 1
 drpopst10yr$cows <- factor(drpopst10yr$cows)
 
 drpopst10yr$wildlife <- 0
-drpopst10yr$wildlife[drpopst10yr$TREATMENT %in% c('W','WC')] <- 1
-drpopst10yr$wildlife[drpopst10yr$TREATMENT %in% c('MW','MWC')] <- 2
+drpopst10yr$wildlife[drpopst10yr$TREATMENT %in% c('W','WC','MW','MWC')] <- 1
+#drpopst10yr$wildlife[drpopst10yr$TREATMENT %in% c('MW','MWC')] <- 2
 drpopst10yr$wildlife <- factor(drpopst10yr$wildlife)
 
 drpopst10yr$mega <- 0
@@ -1010,14 +1038,18 @@ drpopst10yr$mega[drpopst10yr$TREATMENT %in% c('MW','MWC')] <- 1
 drpopst10yr$mega <- factor(drpopst10yr$mega)
 
 ## MODEL ##
-fitdrps <- lmer(avgpopstab~Dscore+cows+wildlife+mega + (1|BLOCK), data = drpopst10yr, na.action = "na.fail")
+fitdrps <- lmer(mean_popst~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = drpopst10yr, na.action = "na.fail")
 summary(fitdrps)
 dredge(fitdrps)
+
+fitdrps_best <- lmer(mean_popst~cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = drpopst10yr, na.action = "na.fail")
+summary(fitdrps_best)
+
 
 
 ## Population Stability - 5 Years ##
 drpopst5yr <- left_join(dscore5, spstmw5, by = "timestep") %>%
-  mutate(popst_diff = avgpopstab - lead(avgpopstab, default = NA, order_by = timestep))
+  mutate(popst_diff = mean_popst - lead(mean_popst, default = NA, order_by = timestep))
 
 ## add columns identifying which herbivore groups were present
 drpopst5yr$cows <- 0
@@ -1025,8 +1057,8 @@ drpopst5yr$cows[drpopst5yr$TREATMENT %in% c('C','WC', 'MWC')] <- 1
 drpopst5yr$cows <- factor(drpopst5yr$cows)
 
 drpopst5yr$wildlife <- 0
-drpopst5yr$wildlife[drpopst5yr$TREATMENT %in% c('W','WC')] <- 1
-drpopst5yr$wildlife[drpopst5yr$TREATMENT %in% c('MW','MWC')] <- 2
+drpopst5yr$wildlife[drpopst5yr$TREATMENT %in% c('W','WC','MW','MWC')] <- 1
+#drpopst5yr$wildlife[drpopst5yr$TREATMENT %in% c('MW','MWC')] <- 2
 drpopst5yr$wildlife <- factor(drpopst5yr$wildlife)
 
 drpopst5yr$mega <- 0
@@ -1034,7 +1066,7 @@ drpopst5yr$mega[drpopst5yr$TREATMENT %in% c('MW','MWC')] <- 1
 drpopst5yr$mega <- factor(drpopst5yr$mega)
 
 ## MODEL ##
-fitdrps5 <- lmer(avgpopstab~Dscore+cows+wildlife+mega + (1|BLOCK), data = drpopst5yr, na.action = "na.fail")
+fitdrps5 <- lmer(mean_popst~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = drpopst5yr, na.action = "na.fail")
 summary(fitdrps5)
 dredge(fitdrps5)
 
@@ -1044,7 +1076,7 @@ dredge(fitdrps5)
 
 ## Species Richness - 10 Years ##
 drrich10yr <- left_join(dscore10, richmw10, by = "timestep") %>%
-  mutate(meanrich_diff = mean_rich - lead(mean_rich, default = NA, order_by = timestep))
+  mutate(meanrich_diff = richness - lead(richness, default = NA, order_by = timestep))
 
 ## add columns identifying which herbivore groups were present
 drrich10yr$cows <- 0
@@ -1052,8 +1084,8 @@ drrich10yr$cows[drrich10yr$TREATMENT %in% c('C','WC', 'MWC')] <- 1
 drrich10yr$cows <- factor(drrich10yr$cows)
 
 drrich10yr$wildlife <- 0
-drrich10yr$wildlife[drrich10yr$TREATMENT %in% c('W','WC')] <- 1
-drrich10yr$wildlife[drrich10yr$TREATMENT %in% c('MW','MWC')] <- 2
+drrich10yr$wildlife[drrich10yr$TREATMENT %in% c('W','WC','MW','MWC')] <- 1
+#drrich10yr$wildlife[drrich10yr$TREATMENT %in% c('MW','MWC')] <- 2
 drrich10yr$wildlife <- factor(drrich10yr$wildlife)
 
 drrich10yr$mega <- 0
@@ -1061,15 +1093,17 @@ drrich10yr$mega[drrich10yr$TREATMENT %in% c('MW','MWC')] <- 1
 drrich10yr$mega <- factor(drrich10yr$mega)
 
 ## MODEL ##
-fitdrri <- lmer(mean_rich~Dscore+cows+wildlife+mega + (1|BLOCK), data = drrich10yr, na.action = "na.fail")
+fitdrri <- lmer(richness~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = drrich10yr, na.action = "na.fail")
 summary(fitdrri)
 dredge(fitdrri)
 
+fitdrri_best <- lmer(richness~Dscore+wildlife + (1|BLOCK) + (1|Unique_ID), data = drrich10yr, na.action = "na.fail")
+summary(fitdrri_best)
 
 
 ## Species Richness - 5 Years ##
 drrich5yr <- left_join(dscore5, richmw5, by = "timestep") %>%
-  mutate(meanrich_diff = mean_rich - lead(mean_rich, default = NA, order_by = timestep))
+  mutate(meanrich_diff = richness - lead(richness, default = NA, order_by = timestep))
 
 ## add columns identifying which herbivore groups were present
 drrich5yr$cows <- 0
@@ -1077,8 +1111,8 @@ drrich5yr$cows[drrich5yr$TREATMENT %in% c('C','WC', 'MWC')] <- 1
 drrich5yr$cows <- factor(drrich5yr$cows)
 
 drrich5yr$wildlife <- 0
-drrich5yr$wildlife[drrich5yr$TREATMENT %in% c('W','WC')] <- 1
-drrich5yr$wildlife[drrich5yr$TREATMENT %in% c('MW','MWC')] <- 2
+drrich5yr$wildlife[drrich5yr$TREATMENT %in% c('W','WC','MW','MWC')] <- 1
+#drrich5yr$wildlife[drrich5yr$TREATMENT %in% c('MW','MWC')] <- 2
 drrich5yr$wildlife <- factor(drrich5yr$wildlife)
 
 drrich5yr$mega <- 0
@@ -1086,50 +1120,89 @@ drrich5yr$mega[drrich5yr$TREATMENT %in% c('MW','MWC')] <- 1
 drrich5yr$mega <- factor(drrich5yr$mega)
 
 ## MODEL ##
-fitdrri5 <- lmer(mean_rich~Dscore+cows+wildlife+mega + (1|BLOCK), data = drrich5yr, na.action = "na.fail")
-summary(fitdrri5)
+fitdrri5 <- lmer(richness~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = drrich5yr, na.action = "na.fail")
 dredge(fitdrri5)
 
 ```
 
-### Do drought, herbivore treatment, or biotic mechanisms predict stability?
+### Do biotic mechanisms predict stability? 
 ```{r}
-## 10 Years ##
 ## first, need to combine data into the one dataframe
-j <- left_join(drst10yr, drcvr10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
-  select(-SE, -SE_cVR)
+j <- left_join(drst10yr, drcvr10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought", "Unique_ID")) #%>%
+  #select(-SE, -SE_cVR)
 
-jj <- left_join(j, drpopst10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
-  select(-SE_popst)
+jj <- left_join(j, drpopst10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought", "Unique_ID")) #%>%
+  #select(-SE_popst)
 
-stabmechmw10 <- left_join(jj, drrich10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
-  select(-SE_rich)
-
-## Model 
-fitstall <- lmer(mean_stability ~ Dscore+mega+cows+wildlife+mean_cVR+avgpopstab+mean_rich+(1|BLOCK), data = stabmechmw10, na.action = "na.fail")
-summary(fitstall)
-dredge(fitstall)
+stabmechmw10 <- left_join(jj, drrich10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought", "Unique_ID")) ##select(-SE_rich)
 
 
-## 5 Years ## 
-## first, need to combine data into the one dataframe
-j5 <- left_join(drst5yr, drcvr5yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
-  select(-SE, -SE_cVR)
+fitstmechmw <- lmer(stability~classicVR+mean_popst+richness + (1|BLOCK) + (1|Unique_ID), data = stabmechmw10, na.action = "na.fail")
+dredge(fitstmechmw)
 
-jj5 <- left_join(j5, drpopst5yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
-  select(-SE_popst)
+fitstmechmw_best <- lmer(stability~classicVR+mean_popst + (1|BLOCK) + (1|Unique_ID), data = stabmechmw10, na.action = "na.fail")
 
-stabmechmw5 <- left_join(jj5, drrich5yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
-  select(-SE_rich)
-
-
-fitstall5 <- lmer(mean_stability ~ Dscore+mega+cows+wildlife+mean_cVR+avgpopstab+mean_rich+(1|BLOCK), data = stabmechmw5, na.action = "na.fail")
-summary(fitstall)
-dredge(fitstall)
-
-rm(list = c("j", "jj", "j5", "jj5"))
+summary(fitstmechmw_best)
 ```
 
+
+## Structural Equation Modeling 
+```{r}
+## Fit piecewise model with random effects
+
+## Create component Models and store in list
+stab_pSEM_list = list(
+  
+  ## predicting stability
+  st_tb = lmer(stability~Dscore+TREATMENT+ classicVR + mean_popst + 
+              richness + (1|BLOCK) + (1|Unique_ID), data=stabmechmw10, 
+              na.action = "na.fail"),
+  
+  ## predicting variance ratio
+  cvr_sem = lmer(classicVR~Dscore+TREATMENT + richness + (1|BLOCK) + 
+                     (1|Unique_ID), data = stabmechmw10, na.action = "na.fail"),
+  
+  ## predicting population stability
+  ps_sem = lmer(mean_popst~Dscore+TREATMENT + (1|BLOCK) + (1|Unique_ID), 
+                  data = drpopst10yr, na.action = "na.fail"),
+  
+  ## predicting species richness
+  ri_sem = lmer(richness~Dscore+TREATMENT + (1|BLOCK) + (1|Unique_ID), 
+                  data = drrich10yr, na.action = "na.fail")
+  
+)
+library(ape) #Version 3.3
+library(caper)
+install.packages("multcompView")
+
+model <- psem(
+  lmer(stability~Dscore+TREATMENT + classicVR + mean_popst + (1|BLOCK) + (1|Unique_ID), data=stabmechmw10),
+  
+  lmer(classicVR~Dscore+TREATMENT + richness + (1|BLOCK) + (1|Unique_ID), data = stabmechmw10),
+  
+  lmer(mean_popst~Dscore+TREATMENT + (1|BLOCK) + (1|Unique_ID), data = stabmechmw10),
+  
+  lmer(richness~Dscore+TREATMENT + (1|BLOCK) + (1|Unique_ID), data = stabmechmw10)
+  
+)
+
+summary(model)
+
+
+
+psem(stab_pSEM_list)
+# Run goodness-of-fit tests
+sem.fit(stab_pSEM_list, st_tb)
+
+# Evaluate path significance using unstandardized coefficients
+sem.coefs(stab_pSEM_list, st_tb, standardize = "none")
+
+# Obtain standardized regression coefficients
+sem.coefs(stab_pSEM_list, st_tb, standardize = "scale")
+
+# Explore individual model fits
+sem.model.fits(stab_pSEM_list)
+```
 
 
 # Figure Settings
@@ -1138,140 +1211,198 @@ theme_set(theme_classic()) #set the theme
 ```
 
 
-# Exploration
-## Visually explore New D score that incorporates drought severity
-```{r, fig.height=4.5, fig.width=7.5}
-## 10 Year Window ##
-## stability
-ggplot(drst10yr, aes(x=timestep, y=mean_stability, color = Dscore)) +
+# Figures
+
+## Figure 2: Stability (full ts, 5yr & 10yr)
+```{r, fig.height=4, fig.width=6.5}
+## prep dataframe for figures
+## now that block is included, need to take the average of blocks
+figdrst <- drst10yr %>%
+  group_by(timestep, TREATMENT) %>%
+  summarize(Dscore = mean(Dscore), stability = mean(stability))
+
+## Make data frame of means first
+figdrst5 <- drst5yr %>%
+  group_by(timestep, TREATMENT) %>%
+  summarize(Dscore = mean(Dscore), stability = mean(stability))
+
+s <- ggplot(msm, aes(x=TREATMENT, y=mean_st)) +
   geom_point(size=3) +
-  geom_line() +
-  facet_wrap(~TREATMENT)
-
-st <- ggplot(drst10yr, aes(x=Dscore, y=mean_stability)) +
-  geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Stability") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
-
-stsl <- ggplot(drst10yr, aes(x=Dscore, y=stability_diff)) +
-  geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Change in Stability") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
-
-stmag <- ggplot(drst10yr, aes(x=Dscore, y=magdiff)) +
-  geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Stability") 
-
-ggarrange(st, stsl, ncol = 1, nrow = 2, 
-          labels = "AUTO")
-
-```
-
-## Visually explore variance ratio and new drought score
-```{r, fig.height=4.5, fig.width=7.5}
-ggplot(drcvr10yr, aes(x=timestep, y=mean_cVR, color = Dscore)) +
-  geom_point(size=3) +
-  geom_line() +
-  facet_wrap(~TREATMENT)
-
-cvrdd <- ggplot(drcvr10yr, aes(x=Dscore, y=mean_cVR)) +
-  geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Variance Ratio") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
-
-cvrsl <- ggplot(drcvr10yr, aes(x=Dscore, y=cVR_diff)) +
-  geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Change in VR") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
-
-
-ggarrange(cvrdd, cvrsl, ncol = 1, nrow = 2,
-          labels = "AUTO")
-```
-
-## Visually explore population stability and drought score
-```{r, fig.height=4.5, fig.width=7.5}
-ggplot(drpopst10yr, aes(x=Dscore, y=avgpopstab, color = TREATMENT)) +
-  geom_point() +
-  ylab("Pop Stability (10yr)") + xlab("Drought Score") +
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.2) + #add standard error bars
+  ylab("Stability (all years)") + xlab("Treatment") + #label axes
+  theme(text = element_text(size = 12)) +
   geom_point(aes(fill=TREATMENT), 
-             colour="black",pch=21, size=3) +
+       colour="black",pch=21, size=4) + 
+  scale_fill_scico_d(palette = "batlow", direction = -1)
+
+sdreg <- ggplot(figdrst, aes(x=Dscore, y=stability)) +
+  geom_point() +
+  ylab("Stability (10 year)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
   scale_color_scico_d(palette = "batlow", direction = -1) +
   theme(legend.position = "right") +
-  geom_smooth(method = "lm", se = FALSE)
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.4) +
+  theme(text = element_text(size = 12)) +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            aes(color = TREATMENT),
+            size = 0.75, 
+            alpha = 0.5) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12))
 
-ggplot(drpopst10yr, aes(x=timestep, y=avgpopstab, color = Dscore)) +
-  geom_point(size=3) +
-  geom_line() +
-  facet_wrap(~TREATMENT)
-
-ps <- ggplot(drpopst10yr, aes(x=Dscore, y=avgpopstab)) +
+sdreg5 <- ggplot(figdrst5, aes(x=Dscore, y=stability)) +
   geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Population Stability") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+  ylab("Stability (5 year)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.4) +
+  theme(text = element_text(size = 12)) +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            aes(color = TREATMENT),
+            size = 0.75, 
+            alpha = 0.5) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12))
 
-ggplot(drpopst10yr, aes(x=Dscore, y=avgpopstab)) +
-  geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Population Stability") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
-
-
-pssl <- ggplot(drpopst10yr, aes(x=Dscore, y=popst_diff)) +
-  geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Change in Pop Stability") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
-
-ggarrange(ps, pssl, ncol = 1, nrow = 2,
+ggarrange(s, sdreg, 
+          ncol = 2, nrow = 1, 
+          common.legend = TRUE, 
+          legend = "bottom", 
+          align = "hv", 
           labels = "AUTO")
+
 ```
 
-## Visually explore richness and drought score
-```{r}
-richdd <- ggplot(drrich10yr, aes(x=Dscore, y=mean_rich)) +
-  geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Species Richness") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+## Figure 3: One Dscore-stability - cvr regression figure
+```{r, fig.width=7, fig.height=9.5}
+## variance ratio by herbivore treatment
+VRtrt <- ggplot(vrplot, aes(x=TREATMENT, y=mean_cVR, fill = TREATMENT, shape = community_type, color = TREATMENT)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_errorbar(aes(ymin = mean_cVR-SE_cVR, ymax=mean_cVR+SE_cVR), width = 0.2, color = "black") +
+  geom_point(size = 3) +
+  geom_point(size = 3, fill = NA, colour = "black") +
+  scale_shape_manual(values = c(21,22,18)) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) + 
+  xlab("Treatment") + ylab("Variance Ratio (all years)") +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  guides(color=guide_legend("Treatment"), fill = FALSE, shape =guide_legend("Species")) +
+  annotate("text", x =0.6, y=1.35, label = "synchronous", size = 3.5, angle='90', fontface = 'italic') +
+  annotate("text", x =0.6, y=0.65, label = "compensatory", size = 3.5, angle='90',fontface = 'italic')
 
-richsl <- ggplot(drrich10yr, aes(x=Dscore, y=meanrich_diff)) +
-  geom_point() +
-  facet_wrap(~TREATMENT, ncol = 6) +
-  geom_smooth(method = "lm") +
-  xlab("Drought Score") + ylab("Change in SR") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+## population stability by herbivore
+pdomspstab <- ggplot(msm, aes(x=TREATMENT, y=avgpopstab)) +
+  geom_errorbar(aes(ymin = avgpopstab-SEpopstab, ymax=avgpopstab+SEpopstab), width = 0.3) +
+  geom_point(aes(fill=TREATMENT), 
+       colour="black",pch=22, size=3) + 
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  ylab("Population Stability (all years)") + xlab("Treatment") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12))
 
-ggarrange(richdd, richsl, ncol = 1, nrow = 2,
-          labels = "AUTO")
-```
+## richness by herbivore treatment
+prich <- ggplot(msm, aes(x=TREATMENT , y=mean_rich)) +
+  geom_errorbar(aes(ymin = mean_rich-SE_rich, ymax=mean_rich+SE_rich), width = 0.3) +
+  geom_point(aes(fill=TREATMENT), 
+       colour="black",pch=21, size=3) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  ylab("Species Richness (all years)") + xlab("Treatment") +  
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) + 
+  labs(col = "Time Period")
 
-# Figures
-## Figure 4
-```{r, fig.width=7, fig.height=10}
 ## prep dataframe for figures
 ## now that block is included, need to take the average of blocks
-figdrst <- stabmechmw10 %>%
+figdrcvr <- drcvr10yr %>%
   group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), stability = mean(mean_stability), cVR = mean(mean_cVR), popstab = mean(avgpopstab),
-            richness = mean(mean_rich))
+  summarize(Dscore = mean(Dscore), classicVR = mean(classicVR))
 
+
+## variance ratio (10 year)
+vrdreg <- ggplot(figdrcvr, aes(x=Dscore, y=classicVR)) +
+  geom_point() +
+  ylab("Variance Ratio (10 year)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.4) +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            aes(color = TREATMENT),
+            size = 0.75, 
+            alpha = 0.5) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) +
+  annotate("text", x =0.1, y=1.2, label = "synchronous", size = 3.5, fontface = 'italic') +
+  annotate("text", x =0.1, y=0.85, label = "compensatory", size = 3.5, fontface = 'italic')
+
+## prep dataframe for figures
+## now that block is included, need to take the average of blocks
+figdrpopst <- drpopst10yr %>%
+  group_by(timestep, TREATMENT) %>%
+  summarize(Dscore = mean(Dscore), popstab = mean(mean_popst))
+
+## population stability (10 year)
+psdreg <- ggplot(figdrpopst, aes(x=Dscore, y=popstab)) +
+  geom_point() +
+  ylab("Population Stability (10 year)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.4) +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            aes(color = TREATMENT),
+            size = 0.75, 
+            alpha = 0.5) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) 
+
+
+## prep dataframe for figures
+## now that block is included, need to take the average of blocks
+figdrri <- drrich10yr %>%
+  group_by(timestep, TREATMENT) %>%
+  summarize(Dscore = mean(Dscore), richness = mean(richness))
+
+## richness (10 year)
+ridreg <- ggplot(figdrri, aes(x=Dscore, y=richness)) +
+  geom_point() +
+  ylab("Species Richness (10 year)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.4) +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            aes(color = TREATMENT),
+            size = 0.75, 
+            alpha = 0.5) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) 
+ 
+
+ggarrange(VRtrt,vrdreg, 
+          pdomspstab,psdreg, 
+          prich,ridreg,
+          ncol = 2, nrow = 3, 
+          common.legend = TRUE, 
+          legend = "bottom", 
+          align = "hv", 
+          labels = "AUTO")
+```
+
+## Figure S4: MW through time
+```{r, fig.width=7, fig.height=10}
 ## make a vector of all sample dates to use for axis labels
 dates <- sort(unique(klee_annual[['Date_final']]))
 window10dates <- year(dates[1:13])
@@ -1291,7 +1422,7 @@ st <- ggplot(figdrst, aes(x=timestep, y=stability, fill = TREATMENT)) +
   scale_fill_scico_d(palette = "batlow", direction = -1)
 
 
-cvr <- ggplot(figdrst, aes(x=timestep, y=cVR, fill = TREATMENT)) +
+cvr <- ggplot(figdrcvr, aes(x=timestep, y=classicVR, fill = TREATMENT)) +
   geom_vline(mapping = aes(xintercept = timestep, color = Dscore), size = 15) +
   geom_line(size = 0.75) +
   geom_point(aes(fill = TREATMENT),
@@ -1306,7 +1437,7 @@ cvr <- ggplot(figdrst, aes(x=timestep, y=cVR, fill = TREATMENT)) +
   geom_hline(yintercept = 1, linetype = "dashed")
 
 
-pst <- ggplot(figdrst, aes(x=timestep, y=popstab, fill = TREATMENT)) +
+pst <- ggplot(figdrpopst, aes(x=timestep, y=popstab, fill = TREATMENT)) +
   geom_vline(mapping = aes(xintercept = timestep, color = Dscore), size = 15) +
   geom_line(size = 0.75) +
   geom_point(aes(fill = TREATMENT),
@@ -1319,7 +1450,7 @@ pst <- ggplot(figdrst, aes(x=timestep, y=popstab, fill = TREATMENT)) +
   theme(legend.position = "none") +
   guides(fill = guide_legend("none")) 
 
-ri <- ggplot(figdrst, aes(x=timestep, y=richness, fill = TREATMENT)) +
+ri <- ggplot(figdrri, aes(x=timestep, y=richness, fill = TREATMENT)) +
   geom_vline(mapping = aes(xintercept = timestep, color = Dscore), size = 15) +
   geom_line(size = 0.75) +
   geom_point(aes(fill = TREATMENT),
@@ -1339,8 +1470,8 @@ ggarrange(st, cvr, pst, ri,
           labels = "AUTO")
 ```
 
-## Figure 5: Correlations
-```{r, fig.width=7, fig.height=4}
+## Figure S5: Stability-VR Correlations
+#```{r, fig.width=7, fig.height=4}
 w10 <- ggplot(figdrst, aes(x=cVR, y=stability)) +
   geom_point() +
   ylab("Stability (10yr)") + xlab("Classic Variance Ratio (10yr)") +
@@ -1357,11 +1488,6 @@ w10 <- ggplot(figdrst, aes(x=cVR, y=stability)) +
   geom_line(stat = "smooth", method = "lm", formula = y~x,
             size = 1.25)
 
-## Make data frame of means first
-figdrst5 <- stabmechmw5 %>%
-  group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), stability = mean(mean_stability), cVR = mean(mean_cVR), popstab = mean(avgpopstab),
-            richness = mean(mean_rich))
 
 w5 <- ggplot(figdrst5, aes(x=cVR, y=stability)) +
   geom_point() +
@@ -1381,137 +1507,7 @@ w5 <- ggplot(figdrst5, aes(x=cVR, y=stability)) +
 
 ggarrange(w5, w10, common.legend = TRUE, legend = "bottom", 
           labels = "AUTO")
-```
-```{r, fig.height=4, fig.width=9.5}
-
-## Calculate Community Stability for all years
-commstab <- community_stability(klee_annual, 
-                                time.var = "Date_numeric", 
-                                abundance.var = "Pin_Hits", 
-                                replicate.var = "Unique_ID")
-
-## join stability measures with treatment info & calculate CV
-stab <- left_join(commstab, treats, by = "Unique_ID") %>% #join comm stability with treatment info
-  mutate(CV = 1/stability) %>% #calculate the CV as inverse of stability
-  group_by(TREATMENT) %>%
-  summarize(mean_st = mean(stability), SE_st = calcSE(stability))
-
-
-s <- ggplot(stab, aes(x=TREATMENT, y=mean_st)) +
-  geom_point(size=3) +
-  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.2) + #add standard error bars
-  ylab("Stability (full timeseries)") + xlab("Treatment") + #label axes
-  theme(text = element_text(size = 12))
-
-sdreg <- ggplot(figdrst, aes(x=Dscore, y=stability)) +
-  geom_point() +
-  ylab("Stability (10yr)") + xlab("Drought Score") +
-  geom_point(aes(fill=TREATMENT), 
-             colour="black",pch=21, size=2.5) +
-  scale_fill_scico_d(palette = "batlow", direction = -1) +
-  scale_color_scico_d(palette = "batlow", direction = -1) +
-  theme(legend.position = "right") +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1.25) +
-  theme(text = element_text(size = 12)) +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            aes(color = TREATMENT),
-            size = 0.75, 
-            alpha = 0.5)
-
-sdreg5 <- ggplot(figdrst5, aes(x=Dscore, y=stability)) +
-  geom_point() +
-  ylab("Stability (5yr)") + xlab("Drought Score") +
-  geom_point(aes(fill=TREATMENT), 
-             colour="black",pch=21, size=2.5) +
-  scale_fill_scico_d(palette = "batlow", direction = -1) +
-  scale_color_scico_d(palette = "batlow", direction = -1) +
-  theme(legend.position = "right") +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1.25) +
-  theme(text = element_text(size = 12)) +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            aes(color = TREATMENT),
-            size = 0.75, 
-            alpha = 0.5)
-
-ggarrange(s, sdreg5, sdreg, 
-          ncol = 3, nrow = 1, 
-          common.legend = TRUE, 
-          legend = "bottom", 
-          align = "hv", 
-          labels = "AUTO")
-
-```
-
-
-
-## Figure 6: One Dscore-stability - cvr regression figure
-```{r, fig.height=3.75, fig.width=8.5}
-
-
-
-vrdreg <- ggplot(figdrst, aes(x=Dscore, y=cVR, color = TREATMENT)) +
-  geom_point() +
-  ylab("Variance Ratio (10yr)") + xlab("Drought Score") +
-  geom_point(aes(fill=TREATMENT), 
-             colour="black",pch=21, size=2.5) +
-  scale_fill_scico_d(palette = "batlow", direction = -1) +
-  scale_color_scico_d(palette = "batlow", direction = -1) +
-  theme(legend.position = "right") +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1) +
- # geom_abline(slope = 5.4930, intercept = 1.5978, col = "#001959", size = 1.25, linetype = "dashed")+ ## MWC
- # geom_abline(slope = 9.7097, intercept = 1.0687, col = "#184E60", size = 1.25)+ ## WC
-  #geom_abline(slope = 4.7049, intercept = 1.1697, col = "#577646", size = 1.25, linetype = "dashed") +## C
-  #geom_abline(slope = 6.5217, intercept = 1.0477, col = "#B28C32", size = 1.25) + ## MW
-  geom_hline(yintercept = 1, linetype = "dashed") +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1) 
-
-
-psdreg <- ggplot(figdrst, aes(x=Dscore, y=popstab, color = TREATMENT)) +
-  geom_point() +
-  ylab("Population Stability (10yr)") + xlab("Drought Score") +
-  geom_point(aes(fill=TREATMENT), 
-             colour="black",pch=21, size=2.5) +
-  scale_fill_scico_d(palette = "batlow", direction = -1) +
-  scale_color_scico_d(palette = "batlow", direction = -1) +
-  theme(legend.position = "right") +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1) 
-
-ridreg <- ggplot(figdrst, aes(x=Dscore, y=richness, color = TREATMENT)) +
-  geom_point() +
-  ylab("Species Richness (10yr)") + xlab("Drought Score") +
-  geom_point(aes(fill=TREATMENT), 
-             colour="black",pch=21, size=2.5) +
-  scale_fill_scico_d(palette = "batlow", direction = -1) +
-  scale_color_scico_d(palette = "batlow", direction = -1) +
-  theme(legend.position = "right") +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1) 
-
-ggplot(figdrst5, aes(x=Dscore, y=richness, color = TREATMENT)) +
-  geom_point() +
-  ylab("Species Richness (5yr)") + xlab("Drought Score") +
-  geom_point(aes(fill=TREATMENT), 
-             colour="black",pch=21, size=2.5) +
-  scale_fill_scico_d(palette = "batlow", direction = -1) +
-  scale_color_scico_d(palette = "batlow", direction = -1) +
-  theme(legend.position = "right") +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1) 
- 
-
-ggarrange(vrdreg, psdreg, ridreg,
-          ncol = 3, nrow = 1, 
-          common.legend = TRUE, 
-          legend = "bottom", 
-          align = "hv", 
-          labels = "AUTO")
-```
-
+#```
 
 ## Figure S4: Stability & Mechanisms by Timescale 
 ```{r, echo = FALSE, fig.width=9.5, fig.height=4}

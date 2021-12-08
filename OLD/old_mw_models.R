@@ -569,3 +569,42 @@ ggplot(drpopst10yr, aes(x=Dscore, y=magdiff)) +
   geom_smooth(method = "lm")
 
 ```
+### Do drought, herbivore treatment, or biotic mechanisms predict stability?
+#### this is too much with all the needed interactions
+#### this would be better as SEM style analysis
+```{r}
+## 10 Years ##
+## first, need to combine data into the one dataframe
+j <- left_join(drst10yr, drcvr10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
+  select(-SE, -SE_cVR)
+
+jj <- left_join(j, drpopst10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
+  select(-SE_popst)
+
+stabmechmw10 <- left_join(jj, drrich10yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
+  select(-SE_rich)
+
+## Model 
+fitstall <- lmer(mean_stability ~ Dscore+mega+cows+wildlife+mean_cVR+avgpopstab+mean_rich+(1|BLOCK), data = stabmechmw10, na.action = "na.fail")
+summary(fitstall)
+dredge(fitstall)
+
+
+## 5 Years ## 
+## first, need to combine data into the one dataframe
+j5 <- left_join(drst5yr, drcvr5yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
+  select(-SE, -SE_cVR)
+
+jj5 <- left_join(j5, drpopst5yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
+  select(-SE_popst)
+
+stabmechmw5 <- left_join(jj5, drrich5yr, by = c("TREATMENT", "timestep", "window_size", "BLOCK", "mega", "cows", "wildlife", "Dscore", "num_drought", "contains_drought")) %>%
+  select(-SE_rich)
+
+
+fitstall5 <- lmer(mean_stability ~ Dscore+mega+cows+wildlife+mean_cVR+avgpopstab+mean_rich+(1|BLOCK), data = stabmechmw5, na.action = "na.fail")
+summary(fitstall)
+dredge(fitstall)
+
+rm(list = c("j", "jj", "j5", "jj5"))
+```
