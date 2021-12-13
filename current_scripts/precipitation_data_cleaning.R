@@ -68,5 +68,5 @@ pptmean <- pptrange %>%
 
 
 ## clean up workspace
-rm(list = c("jx", "jppt", "jjppt", "ppt98_02", "ppt2", "ppt", "early_ppt",
+rm(list = c("jx", "jppt", "jjppt", "ppt2", "ppt", "early_ppt",
             "ppt98", "ppt99", "ppt00", "ppt01", "ppt02"))

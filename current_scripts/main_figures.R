@@ -2,40 +2,12 @@
 
 ## load packages
 library(tidyverse)
+library(lubridate)
+library(scico)
+library(ggpubr)
 
 ## read in data
 source("current_scripts/finalprep_postcalcs.R") 
-
-
-## combine both VR dataframes into one in order to put all in the same panel
-colnames(b5tsVR) <- c("Unique_ID", "TREATMENT", "BLOCK", "classicVR", "longVR", "shortVR")
-
-## add column to differentiate community type
-big5tsVR <- b5tsVR %>% 
-  mutate(community_type = "Dominant") 
-alltsVR <- tsVR %>% 
-  mutate(community_type = "All Species")
-
-## join data frames
-tsVRalldom <- rbind(big5tsVR, alltsVR)
-
-## set treatment as a factor
-tsVRalldom$TREATMENT <- as.factor(tsVRalldom$TREATMENT)
-
-## make one data frame with means calculated for graphing
-tsVR_plot <- tsVRalldom %>%
-  group_by(TREATMENT, community_type) %>%
-  summarise(mean_cVR = mean(classicVR), SE_cVR = calcSE(classicVR), mean_lVR = mean(longVR), SE_lVR = calcSE(longVR), mean_sVR = mean(shortVR), SE_sVR = calcSE(shortVR)) %>%
-  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
-
-
-
-
-
-ppt_date <- ppt %>%
-  mutate(Date_final = ymd(sample_date)) %>%
-  filter(drought == 1)
-
 
 ## Figure Settings ## 
 theme_set(theme_classic()) #set the theme
@@ -44,8 +16,12 @@ theme_set(theme_classic()) #set the theme
 ## Figure 1: Conceptual ##
 
 
-
 ## Figure 2: Cover and Richness over time
+## get dates correct for plotting
+ppt_date <- drought_record %>%
+  mutate(Date_final = ymd(sample_date)) %>%
+  filter(drought == 1)
+
 ## calculate mean cover at each time point 
 meancov <- totcov %>%
   mutate(type = "Full") %>%
@@ -56,6 +32,10 @@ meancov <- totcov %>%
 meancov$TREATMENT <- as.factor(meancov$TREATMENT)
 meancov <- meancov %>%
   mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+
+## make a vector of all sample dates to use for axis labels
+dates <- meancov[['Date_final']]
+june <- unique(dates[dates %like% "06-"])
 
 ## Graph total cover over time
 tcov_drought <- ggplot(meancov, aes(x=Date_final, y=meancov, color = TREATMENT)) +
@@ -89,18 +69,7 @@ ggarrange(tcov_drought, richtime, ncol = 1, nrow = 2,
 
 
 ## Figure 3: Stability (full ts, 5yr & 10yr) 
-## prep dataframe for figures
-## now that block is included, need to take the average of blocks
-figdrst <- dmw10 %>%
-  group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), stability = mean(stability))
-
-## Make data frame of means first
-figdrst5 <- dmw5 %>%
-  group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), stability = mean(stability))
-
-s <- ggplot(msm, aes(x=TREATMENT, y=mean_st)) +
+s <- ggplot(meanstab_mech, aes(x=TREATMENT, y=mean_st)) +
   geom_point(size=3) +
   geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.2) + #add standard error bars
   ylab("Stability (all years)") + xlab("Treatment") + #label axes
@@ -155,7 +124,7 @@ ggarrange(s, sdreg,
 
 ## Figure 4: One Dscore-stability - cvr regression figure
 ## variance ratio by herbivore treatment
-VRtrt <- ggplot(vrplot, aes(x=TREATMENT, y=mean_cVR, fill = TREATMENT, shape = community_type, color = TREATMENT)) +
+VRtrt <- ggplot(tsVR_plot, aes(x=TREATMENT, y=mean_cVR, fill = TREATMENT, shape = community_type, color = TREATMENT)) +
   geom_hline(yintercept = 1, linetype = "dashed") +
   geom_errorbar(aes(ymin = mean_cVR-SE_cVR, ymax=mean_cVR+SE_cVR), width = 0.2, color = "black") +
   geom_point(size = 3) +
@@ -170,7 +139,7 @@ VRtrt <- ggplot(vrplot, aes(x=TREATMENT, y=mean_cVR, fill = TREATMENT, shape = c
   annotate("text", x =0.6, y=0.65, label = "compensatory", size = 3.5, angle='90',fontface = 'italic')
 
 ## population stability by herbivore
-pdomspstab <- ggplot(msm, aes(x=TREATMENT, y=avgpopstab)) +
+pdomspstab <- ggplot(meanstab_mech, aes(x=TREATMENT, y=avgpopstab)) +
   geom_errorbar(aes(ymin = avgpopstab-SEpopstab, ymax=avgpopstab+SEpopstab), width = 0.3) +
   geom_point(aes(fill=TREATMENT), 
              colour="black",pch=22, size=3) + 
@@ -179,7 +148,7 @@ pdomspstab <- ggplot(msm, aes(x=TREATMENT, y=avgpopstab)) +
   theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12))
 
 ## richness by herbivore treatment
-prich <- ggplot(msm, aes(x=TREATMENT , y=mean_rich)) +
+prich <- ggplot(meanstab_mech, aes(x=TREATMENT , y=mean_rich)) +
   geom_errorbar(aes(ymin = mean_rich-SE_rich, ymax=mean_rich+SE_rich), width = 0.3) +
   geom_point(aes(fill=TREATMENT), 
              colour="black",pch=21, size=3) +
@@ -187,13 +156,6 @@ prich <- ggplot(msm, aes(x=TREATMENT , y=mean_rich)) +
   ylab("Species Richness (all years)") + xlab("Treatment") +  
   theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) + 
   labs(col = "Time Period")
-
-## prep dataframe for figures
-## now that block is included, need to take the average of blocks
-figdrcvr <- drcvr10yr %>%
-  group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), classicVR = mean(classicVR))
-
 
 ## variance ratio (10 year)
 vrdreg <- ggplot(figdrcvr, aes(x=Dscore, y=classicVR)) +
@@ -217,11 +179,6 @@ vrdreg <- ggplot(figdrcvr, aes(x=Dscore, y=classicVR)) +
   annotate("text", x =0.1, y=1.2, label = "synchronous", size = 3.5, fontface = 'italic') +
   annotate("text", x =0.1, y=0.85, label = "compensatory", size = 3.5, fontface = 'italic')
 
-## prep dataframe for figures
-## now that block is included, need to take the average of blocks
-figdrpopst <- drpopst10yr %>%
-  group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), popstab = mean(mean_popst))
 
 ## population stability (10 year)
 psdreg <- ggplot(figdrpopst, aes(x=Dscore, y=popstab)) +
@@ -240,12 +197,6 @@ psdreg <- ggplot(figdrpopst, aes(x=Dscore, y=popstab)) +
             alpha = 0.5) +
   theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) 
 
-
-## prep dataframe for figures
-## now that block is included, need to take the average of blocks
-figdrri <- drrich10yr %>%
-  group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), richness = mean(richness))
 
 ## richness (10 year)
 ridreg <- ggplot(figdrri, aes(x=Dscore, y=richness)) +
@@ -319,4 +270,3 @@ ggarrange(VRstab, domspstabst, prichstab,
           labels = "AUTO",
           common.legend = TRUE, 
           legend = "bottom")
-

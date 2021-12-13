@@ -1,6 +1,8 @@
 ## Supplementary Figures ##
 
 library(tidyverse)
+library(scico)
+library(ggpubr)
 
 source("current_scripts/finalprep_postcalcs.R") ## read in data
 
@@ -38,9 +40,13 @@ ggarrange(s, b, v,
 
 
 ## Figure S2: Moving-window Time-Scale
+
+mean_mwstab$TREATMENT <- as.factor(mean_mwstab$TREATMENT)
+mean_mwstab <- mean_mwstab %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
 ## Stability by Timescale
 stabts <- ggplot(mean_mwstab, aes(x = window_size, y=mean_stab)) +
-  geom_point(size = 3) +
+  geom_point(size = 1.5) +
   ylab("Mean Stability") + xlab("Window Size of Stability Calculation") +
   geom_errorbar(aes(ymin=mean_stab-SE_stab, ymax = mean_stab+SE_stab), width = 0.2) +
   geom_point(aes(fill=TREATMENT), 
@@ -48,30 +54,64 @@ stabts <- ggplot(mean_mwstab, aes(x = window_size, y=mean_stab)) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
   labs(fill = "Treatment")
 
+
+mean_mwcVR$TREATMENT <- as.factor(mean_mwcVR$TREATMENT)
+meancrv <- mean_mwcVR %>%
+  group_by(TREATMENT, window_size) %>%
+  summarise(mean_vr = mean(mean_cVR), se_vr = calcSE(mean_cVR)) %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+
 ## Variance Ratio by Timescale
-cvrts <- ggplot(mean_mwcVR, aes(x = window_size, y=mean_cVR)) +
-  geom_point(size = 3) +
+cvrts <- ggplot(meancrv, aes(x = window_size, y=mean_vr)) +
+  geom_point(size = 1.5) +
   ylab("Mean Variance Ratio") + xlab("Window Size of VR Calculation") +
-  geom_errorbar(aes(ymin=mean_cVR-SE_cVR, ymax = mean_cVR+SE_cVR), width = 0.2) +
+  geom_errorbar(aes(ymin=mean_vr-se_vr, ymax = mean_vr+se_vr), width = 0.2) +
   geom_point(aes(fill=TREATMENT), 
              colour="black",pch=21, size=3.5) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
   labs(fill = "Treatment")
 
+
+
+
+mean_mwrich$TREATMENT <- as.factor(mean_mwrich$TREATMENT)
+meanri <- mean_mwrich %>%
+  group_by(TREATMENT, window_size) %>%
+  summarise(mean_ri = mean(mean_rich), se_ri = calcSE(mean_rich)) %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+
 ## Richness by Timescale
-richts <- ggplot(mean_mwrich, aes(x=window_size, y=mean_rich)) +
-  geom_point(size=3) +
+richts <- ggplot(meanri, aes(x=window_size, y=mean_ri)) +
+  geom_point(size=1.5) +
   ylab("Mean Richness") + xlab("Window Size of Richness Calculation") +
-  geom_errorbar(aes(ymin=mean_rich-SE_rich, ymax = mean_rich+SE_rich), width = 0.2) +
+  geom_errorbar(aes(ymin=mean_ri-se_ri, ymax = mean_ri+se_ri), width = 0.2) +
   geom_point(aes(fill=TREATMENT), 
              colour="black",pch=21, size=3.5) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
   labs(fill = "Treatment")
+
+
+
+
+mean_mwpopst$TREATMENT <- as.factor(mean_mwpopst$TREATMENT)
+mean_mwpopst <- mean_mwpopst %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
 
 ## Dominant Species Stability by Timescale
 
-ggarrange(stabts, cvrts, richts, 
-          ncol=3, nrow = 1, align = "hv", 
+popstts <- ggplot(mean_mwpopst, aes(x=window_size, y=mean_popst)) + 
+  geom_point(size=1.5) +
+  ylab("Mean Dom Pop Stability") + xlab("Window Size of Pop Stability Calculation") +
+  geom_errorbar(aes(ymin=mean_popst-SE_popst, ymax = mean_popst+SE_popst), width = 0.2) +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=3.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  labs(fill = "Treatment")
+
+ggarrange(stabts, cvrts, richts, popstts,
+          ncol=2, nrow = 2, align = "hv", 
           common.legend = TRUE, 
           labels = "AUTO", 
           legend = "bottom")
@@ -80,7 +120,7 @@ ggarrange(stabts, cvrts, richts,
 
 ## Figure S3: Stability & Mech MW over time; drought score
 ## make a vector of all sample dates to use for axis labels
-dates <- sort(unique(klee_annual[['Date_final']]))
+dates <- sort(unique(totcov[['Date_final']]))
 window10dates <- year(dates[1:13])
 
 breaks <- c(1:13)

@@ -8,6 +8,7 @@ setwd("~/Repositories/klee-stability")
 library(tidyverse)
 library(codyn)
 library(tsvr)
+library(lubridate)
 
 
 ## source cleaned data
@@ -341,8 +342,8 @@ mw5all <- left_join(jkl2, richmw5, by = c("Unique_ID", "BLOCK", "TREATMENT", "ti
 
 ## Clean up environment
 rm(list = c("jk", "jk2", "nondom", "tmws", "totcov", "avg_biomass", "big5annual",
-            "klee_annual", "klee_long", "mean_mwstab", "mw_classicVR", "mwstability",
-            "stab_mw_tx", "cVR_mw_tx", "cvrmw10", "cvrmw5", "mean_mwcVR",
-            "mean_mwpopst", "tmwr", "tmwcVR", "stabmw5", "stabmw10", "spstmw5",
-            "mean_mwrich", "mwrichness", "mwspstab", "popst_mw_tx", "psmw",
+            "klee_annual", "klee_long", "mw_classicVR", "mwstability",
+            "stab_mw_tx", "cVR_mw_tx", "cvrmw10", "cvrmw5",
+            "tmwr", "tmwcVR", "stabmw5", "stabmw10", "spstmw5",
+             "mwrichness", "mwspstab", "popst_mw_tx", "psmw",
             "rich_mw_tx", "richmw10", "richmw5", "spstmw10", "jkl", "jkl2"))

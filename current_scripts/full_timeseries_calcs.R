@@ -1,13 +1,12 @@
-## set working directory
-setwd("~/Repositories/klee-stability")
 
 ## Load packages
 library(tidyverse)
 library(codyn)
 library(tsvr)
+library(lubridate)
 
 ## source cleaned data
-source("klee_allyears_cleaning.R")
+source("current_scripts/klee_allyears_cleaning.R")
 
 # Calculations
 ## Calculate Community Stability for all years
@@ -317,10 +316,10 @@ stability_mechanisms$mega[stability_mechanisms$TREATMENT %in% c('MW','MWC')] <- 
 stability_mechanisms$mega <- factor(stability_mechanisms$mega)
 
 
-rm(list = c("avg_biomass", "b5meantsVR", "b5siteout", "b5tsVR", "big5annual",
+rm(list = c("avg_biomass", "b5meantsVR", "b5siteout", "big5annual",
             "big5meanannrich", "big5meanrichplot", "big5rich", "BP_dominance",
-            "dominance", "dompopstab", "domsp_agg_stab", "klee_annual", "klee_long",
-            "meanannrich", "meandompopstab", "meanplot_BPdom", "meanpopstab", "meanrichplot",
+            "dominance", "dompopstab", "domsp_agg_stab", "klee_long",
+            "meandompopstab", "meanplot_BPdom", "meanpopstab", "meanrichplot",
             "meantsVR", "nondom", "nondommeanannrich", "nondommeanrichplot", "nondomrich",
             "pinhits", "plot", "plot2", "res", "res0", "resLong", "resShort",
-            "rich", "siteout", "stability", "VR_plots", "tsVR"))
+            "rich", "siteout", "stability", "VR_plots"))
