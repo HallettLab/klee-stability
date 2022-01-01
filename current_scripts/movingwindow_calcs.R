@@ -256,11 +256,11 @@ richnessmw_func <- function(input_data, timestep, ...) { ## function inputs = da
     temp_rich <- input_data %>%
       filter(Date_numeric %in% temp_samplepts) %>% ## filter the correct sample points from input data
       group_by(TREATMENT, Unique_ID, Date_numeric) %>%
-      mutate(richness = n())
+      mutate(richness = n()) ## CODE EDIT: consider changing to summarise(richness = n()) rather than mutate, to avoid duplicate rows that result in giving more weight to high-richness years in the subsequent averaging step
     
     temp_rich$timestep <- i ## create a column for time step in the temporary data frame
     
-    mean_rich <- temp_rich %>%  ## calculate the average dominance over each time window for each plot
+    mean_rich <- temp_rich %>%  ## calculate the average richness over each time window for each plot
       group_by(TREATMENT, Unique_ID, timestep) %>%
       summarise(richness = mean(richness))
     

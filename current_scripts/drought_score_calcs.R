@@ -177,6 +177,7 @@ d_severity <- dperc_record %>%
 d_sever_prev <- d_severity %>%
   mutate(drought_prev = ifelse(drought == 1, 0, 
                                ifelse(lag(drought, default = 0) == 1, 1, 0)))
+  ## CODE EDIT: This doesn't appear as if it will affect the outcome, but dataframe should be sorted by sample_date *before* calculating lag. But see below, you may also need to update so that each year has a column for severity of previous year, in order to correctly add 0.5*severity for lag years.
 
 ### CREATE Drought Scoring FUNCTION ###
 dr_score_func <- function(input_data, timestep, ...) { 
@@ -226,6 +227,7 @@ dr_score_func <- function(input_data, timestep, ...) {
                                      ifelse(drought_prev == "1",
                                             0.5*severity, 0))) %>%
         select(-preceding12ppt, -percentile, -severity, -drought_prev)
+      ## CODE EDIT: For a year in which there isn't a drought, but there was a previous-year drought, is this meant to give 0.5*(drought severity of previous year)? Currently, it's multiplying 0.5 by the severity of the year in question (not the previous year), which just gives 0.
       
       ## make a column for timestep
       tempDrID$timestep <- i

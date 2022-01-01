@@ -18,6 +18,7 @@ dredge(fitsth)
 ## best fitting model for stability
 fitsth_best <- lmer(stability~cows+wildlife + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
 summary(fitsth_best)
+## CODE EDIT: Here the most parsimonious model with delta AIC <2 is the one with only cows as a predictor, even though cows + wildlife is ranked first. I would present this slightly differently in text - let's chat about it.
 
 
 ## MODEL FOR FIGURE 3B ##
@@ -71,6 +72,7 @@ dredge(fitdrps)
 
 fitdrps_best <- lmer(mean_popst~cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
 summary(fitdrps_best)
+## CODE EDIT: Again, the model with just cows falls within <2 delta AIC of the best model, so that should be acknowledged in text.
 
 
 ## MODEL FOR FIGURE 4E ##
@@ -82,7 +84,7 @@ dredge(fitrih)
 fitrih_best <- lmer(meanrich~wildlife + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
 summary(fitrih_best)
 ## this one has singularity issues... not sure what to do... 
-
+## CODE EDIT: Re-run as a linear model without the random effect, you should get essentially the same answer because the data here aren't supporting the complexity of the random effects structure so it's estimating 0 random effects variance.
 
 ## MODEL FOR FIGURE 4F ##
 ## how is richness (10 year) predicted by drought and herbivory?
@@ -93,6 +95,7 @@ dredge(fitdrri)
 fitdrri_best <- lmer(richness~Dscore+wildlife + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
 summary(fitdrri_best)
 ## this one has singularity issues... not sure what to do... 
+## CODE EDIT: see suggestion above
 
 
 ## MODEL FOR FIGURE 5 ##

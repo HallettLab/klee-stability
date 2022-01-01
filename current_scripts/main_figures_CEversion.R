@@ -5,7 +5,12 @@ library(tidyverse)
 library(lubridate)
 library(scico)
 library(ggpubr)
+<<<<<<< HEAD
 library(cowplot)
+=======
+library(scico)
+
+>>>>>>> 1431e978576d3799a6f6a79993eac4739a59cf87
 ## read in data
 source("current_scripts/finalprep_postcalcs.R") 
 
