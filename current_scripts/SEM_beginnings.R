@@ -8,29 +8,6 @@ library(piecewiseSEM)
 library(multcompView)
 library(lme4)
 
-
-## model with Treatment as a factor
-stability_psem <- psem(
-  
-  lm(stability~Dscore+TREATMENT + classicVR + mean_popst + richness , data=dmw10),
-  ## removed block as a random effect from this model as it had a variance of 0
-  ## it was raising issues about singularity when it stayed in.
-  
-  lmer(classicVR~Dscore+TREATMENT + (1|BLOCK), data = dmw10),
-  
-  lmer(mean_popst~Dscore+TREATMENT + (1|BLOCK), data = dmw10),
-  
-  lmer(richness~Dscore+TREATMENT + (1|BLOCK), data = dmw10),
-  
-  classicVR %~~% mean_popst, ## include correlated error term
-  
-  data = dmw10
-  
-)
-
-summary(stability_psem)
-
-
 ## change herbivore columns to numeric. It is currently coded as a factor; have to change
 ## to character first then numeric otherwise it changes the 0 & 1 to 1 & 2
 dmw10$cows <- as.character(dmw10$cows)
@@ -80,7 +57,6 @@ mega_psem <- psem(
 
 summary(mega_psem)
 
-
 ## model comparing wildlife to no wildlife (meso)
 meso_psem <- psem(
   
@@ -102,6 +78,30 @@ summary(meso_psem)
 
 
 
+
+
+#### OLD #####
+
+## model with Treatment as a factor
+stability_psem <- psem(
+  
+  lm(stability~Dscore+TREATMENT + classicVR + mean_popst + richness , data=dmw10),
+  ## removed block as a random effect from this model as it had a variance of 0
+  ## it was raising issues about singularity when it stayed in.
+  
+  lmer(classicVR~Dscore+TREATMENT + (1|BLOCK), data = dmw10),
+  
+  lmer(mean_popst~Dscore+TREATMENT + (1|BLOCK), data = dmw10),
+  
+  lmer(richness~Dscore+TREATMENT + (1|BLOCK), data = dmw10),
+  
+  classicVR %~~% mean_popst, ## include correlated error term
+  
+  data = dmw10
+  
+)
+
+summary(stability_psem)
 
 
 

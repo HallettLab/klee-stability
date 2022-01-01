@@ -5,7 +5,7 @@ library(tidyverse)
 library(lubridate)
 library(scico)
 library(ggpubr)
-
+library(cowplot)
 ## read in data
 source("current_scripts/finalprep_postcalcs.R") 
 
@@ -89,10 +89,10 @@ sdreg <- ggplot(figdrst, aes(x=Dscore, y=stability)) +
   geom_line(stat = "smooth", method = "lm", formula = y~x,
             size = 1.4) +
   theme(text = element_text(size = 12)) +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            aes(color = TREATMENT),
-            size = 0.75, 
-            alpha = 0.5) +
+  #geom_line(stat = "smooth", method = "lm", formula = y~x,
+           # aes(color = TREATMENT),
+           # size = 0.75, 
+           # alpha = 0.5) +
   theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12))
 
 sdreg5 <- ggplot(figdrst5, aes(x=Dscore, y=stability)) +
@@ -119,7 +119,7 @@ ggarrange(s, sdreg,
           align = "hv", 
           labels = "AUTO")
 
-
+ggsave("fig3.png", width = 7, height = 4)
 
 
 ## Figure 4: One Dscore-stability - cvr regression figure
@@ -135,8 +135,9 @@ VRtrt <- ggplot(tsVR_plot, aes(x=TREATMENT, y=mean_cVR, fill = TREATMENT, shape 
   xlab("Treatment") + ylab("Variance Ratio (all years)") +
   scale_color_scico_d(palette = "batlow", direction = -1) +
   guides(color=guide_legend("Treatment"), fill = FALSE, shape =guide_legend("Species")) +
-  annotate("text", x =0.6, y=1.35, label = "synchronous", size = 3.5, angle='90', fontface = 'italic') +
-  annotate("text", x =0.6, y=0.65, label = "compensatory", size = 3.5, angle='90',fontface = 'italic')
+  annotate("text", x =5, y=1.08, label = "synchronous", size = 3.5,  fontface = 'italic') +
+  annotate("text", x =5, y=0.95, label = "compensatory", size = 3.5, fontface = 'italic')
+
 
 ## population stability by herbivore
 pdomspstab <- ggplot(meanstab_mech, aes(x=TREATMENT, y=avgpopstab)) +
@@ -170,14 +171,14 @@ vrdreg <- ggplot(figdrcvr, aes(x=Dscore, y=classicVR)) +
             size = 1) +
   geom_hline(yintercept = 1, linetype = "dashed") +
   geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1.4) +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            aes(color = TREATMENT),
-            size = 0.75, 
-            alpha = 0.5) +
+            size = 1.25) +
+  #geom_line(stat = "smooth", method = "lm", formula = y~x,
+          #  aes(color = TREATMENT),
+          #  size = 0.75, 
+          #  alpha = 0.5) +
   theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) +
-  annotate("text", x =0.1, y=1.2, label = "synchronous", size = 3.5, fontface = 'italic') +
-  annotate("text", x =0.1, y=0.85, label = "compensatory", size = 3.5, fontface = 'italic')
+  annotate("text", x =0.1, y=1.1, label = "synchronous", size = 3.5, fontface = 'italic') +
+  annotate("text", x =0.1, y=0.95, label = "compensatory", size = 3.5, fontface = 'italic')
 
 
 ## population stability (10 year)
@@ -185,16 +186,16 @@ psdreg <- ggplot(figdrpopst, aes(x=Dscore, y=popstab)) +
   geom_point() +
   ylab("Population Stability (10 year)") + xlab("Drought Score") +
   geom_point(aes(fill=TREATMENT), 
-             colour="black",pch=21, size=2.5) +
+             colour="black",pch=22, size=2.5) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
   scale_color_scico_d(palette = "batlow", direction = -1) +
   theme(legend.position = "right") +
   geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1.4) +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            aes(color = TREATMENT),
-            size = 0.75, 
-            alpha = 0.5) +
+            size = 1.25, color = "darkgray") +
+  #geom_line(stat = "smooth", method = "lm", formula = y~x,
+   #         aes(color = TREATMENT),
+    #        size = 0.75, 
+     #       alpha = 0.5) +
   theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) 
 
 
@@ -208,11 +209,11 @@ ridreg <- ggplot(figdrri, aes(x=Dscore, y=richness)) +
   scale_color_scico_d(palette = "batlow", direction = -1) +
   theme(legend.position = "right") +
   geom_line(stat = "smooth", method = "lm", formula = y~x,
-            size = 1.4) +
-  geom_line(stat = "smooth", method = "lm", formula = y~x,
-            aes(color = TREATMENT),
-            size = 0.75, 
-            alpha = 0.5) +
+            size = 1.25) +
+  #geom_line(stat = "smooth", method = "lm", formula = y~x,
+   #         aes(color = TREATMENT),
+    #        size = 0.75, 
+     #       alpha = 0.5) +
   theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) 
 
 
@@ -226,6 +227,8 @@ ggarrange(VRtrt,vrdreg,
           labels = "AUTO")
 
 
+ggsave("fig4.png", height = 10, width = 6.5)
+
 ## Figure 5: Stability & Biotic Mechanisms
 ## VR and stability
 VRstab <- ggplot(meanstab_mech, aes(x=mean_classicVR, y=mean_st)) +
@@ -237,11 +240,13 @@ VRstab <- ggplot(meanstab_mech, aes(x=mean_classicVR, y=mean_st)) +
              colour="black",pch=21, size=4) +
   scale_fill_scico_d(palette = "batlow", direction = -1) +
   ylab("Stability") + xlab("Variance Ratio") +  
-  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))  + #change font sizes
+  #theme(legend.title = element_text(size=14)) +  
+  theme(text = element_text(size = 14))  + #change font sizes
   #geom_abline(slope = -10.8462, intercept = 5.6445) +
-  labs(col = "Treatment") +
+  #labs(col = "Treatment") +
   annotate("text", x =1.07, y=3.3, label = "synchronous", size = 5, angle='90', fontface = 'italic') +
-  annotate("text", x =0.9, y=3.3, label = "compensatory", size = 5, angle='90',fontface = 'italic')
+  annotate("text", x =0.9, y=3.3, label = "compensatory", size = 5, angle='90',fontface = 'italic') +
+  theme(legend.position = "none")
 
 ## Aggregate dominant sp stability by stability
 domspstabst <- ggplot(meanstab_mech, aes(x=avgpopstab, y=mean_st)) +
@@ -250,9 +255,11 @@ domspstabst <- ggplot(meanstab_mech, aes(x=avgpopstab, y=mean_st)) +
   geom_errorbarh(aes(xmin = avgpopstab-SEpopstab, xmax=avgpopstab+SEpopstab), height = 0.1) + #add standard error bars
   geom_point(aes(fill=TREATMENT), 
              colour="black",pch=22, size=4) +
-  scale_fill_scico_d(palette = "batlow", direction = -1) +  ylab("Stability") + xlab("Dominant Sp Stability") +  
-  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14)) + #change font sizes
-  labs(col = "Treatment") 
+  scale_fill_scico_d(palette = "batlow", direction = -1) +  ylab("Stability") + xlab("Population Stability") +  
+  #theme(legend.title = element_text(size=14)) +  
+  theme(text = element_text(size = 14)) + #change font sizes
+  #labs(col = "Treatment") +
+  theme(legend.position = "none")
 
 ## richness and stability
 prichstab <- ggplot(meanstab_mech, aes(x=mean_rich, y=mean_st)) +
@@ -260,13 +267,23 @@ prichstab <- ggplot(meanstab_mech, aes(x=mean_rich, y=mean_st)) +
   geom_errorbarh(aes(xmin = mean_rich-SE_rich, xmax=mean_rich+SE_rich), height = 0.1) + #add standard error bars
   geom_point(aes(fill=TREATMENT), 
              colour="black",pch=21, size=4) +
-  scale_fill_scico_d(palette = "batlow", direction = -1) +  ylab("Stability") + xlab("Richness") +  
-  theme(legend.title = element_text(size=14)) +  theme(text = element_text(size = 14))  + #change font sizes
-  labs(col = "Treatment")
+  scale_fill_scico_d(palette = "batlow", direction = -1) +  ylab("Stability") + xlab("Species Richness") +  
+  #theme(legend.title = element_text(size=14)) +  
+  theme(text = element_text(size = 14))  + #change font sizes
+  #labs(col = "Treatment") +
+  theme(legend.position = "none")
 
-ggarrange(VRstab, domspstabst, prichstab,
+fig5 <- ggarrange(VRstab, domspstabst, prichstab,
           ncol = 3, nrow=1,
           align = "hv",
           labels = "AUTO",
-          common.legend = TRUE, 
-          legend = "bottom")
+          common.legend = FALSE)
+
+## extract the legend from Fig 4 for use in Fig 5
+leg <- get_legend(VRtrt +
+                    theme(legend.position = "bottom"))
+
+plot_grid(fig5, leg, rel_heights = c(8,1), ncol = 1)
+
+ggsave("fig5.png", width = 9, height = 4)
+
