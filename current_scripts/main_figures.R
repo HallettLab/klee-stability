@@ -5,6 +5,7 @@ library(tidyverse)
 library(lubridate)
 library(scico)
 library(ggpubr)
+library(scico)
 
 ## read in data
 source("current_scripts/finalprep_postcalcs.R") 
