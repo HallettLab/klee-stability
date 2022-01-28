@@ -1,9 +1,7 @@
-setwd("~/Repositories/klee-stability")
-
 library(tidyverse)
 library(lubridate)
 library(data.table)
-library(SPEI)
+#library(SPEI)
 
 ## read in data
 ppt <- read.csv("monthly_ppt.csv")

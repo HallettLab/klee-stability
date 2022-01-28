@@ -1,24 +1,32 @@
 ## Mixed Effects Models ##
 
 ## read in data
-source("current_scripts/finalprep_postcalcs.R")
+source("finalprep_postcalcs.R")
 
 ## load packages
 library(tidyverse)
 library(lme4)
 library(MuMIn)
 
+cor(stability_mechanisms$classicVR, stability_mechanisms$meanpopstab)
+cor(stability_mechanisms$classicVR, stability_mechanisms$meanrich)
+cor(stability_mechanisms$meanpopstab, stability_mechanisms$meanrich)
+
 ## MODEL for FIGURE 3A ##
 ## how is stability predicted by varying groups of herbivores?
 fitsth <- lmer(stability~cows+wildlife+mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
-summary(fitsth)
-fitsth
 dredge(fitsth)
 
-## best fitting model for stability
-fitsth_best <- lmer(stability~cows+wildlife + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
+## best fitting, most parsimonious model for stability
+fitsth_best <- lmer(stability~cows + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
 summary(fitsth_best)
 ## CODE EDIT: Here the most parsimonious model with delta AIC <2 is the one with only cows as a predictor, even though cows + wildlife is ranked first. I would present this slightly differently in text - let's chat about it.
+
+fitsth_top_alt <- lmer(stability~cows + wildlife + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
+summary(fitsth_top_alt)
+
+fitsth_top_alt2 <- lmer(stability~cows + mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
+summary(fitsth_top_alt2)
 
 
 ## MODEL FOR FIGURE 3B ##
@@ -37,7 +45,6 @@ summary(fitdrst_best)
 ## MODEL FOR FIGURE 4A ##
 ## how is the variance ratio predicted by varying groups of herbivores?
 fitcvrh <- lmer(classicVR~cows+wildlife+mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
-summary(fitcvrh)
 dredge(fitcvrh)
 
 fitcvr_best <- lmer(classicVR~cows+mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
@@ -47,7 +54,6 @@ summary(fitcvr_best)
 ## MODEL FOR FIGURE 4B ## 
 ## how is the variance ratio (10 year) predicted by drought & herbivory?
 fitdrcvr <- lmer(classicVR~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
-summary(fitdrcvr)
 dredge(fitdrcvr)
 
 fitdrcvr_best <- lmer(classicVR~Dscore+cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
@@ -57,7 +63,6 @@ summary(fitdrcvr_best)
 ## MODEL FOR FIGURE 4C ##
 ## how is dominant species population stability predicted by varying groups of herbivores?
 fitdpsh <- lmer(meanpopstab~cows+wildlife+mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
-summary(fitdpsh)
 dredge(fitdpsh)
 
 fitdpsh_best <- lmer(meanpopstab~1 + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
@@ -70,18 +75,25 @@ fitdrps <- lmer(mean_popst~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID)
 summary(fitdrps)
 dredge(fitdrps)
 
-fitdrps_best <- lmer(mean_popst~cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
+fitdrps_best <- lmer(mean_popst~cows + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
 summary(fitdrps_best)
 ## CODE EDIT: Again, the model with just cows falls within <2 delta AIC of the best model, so that should be acknowledged in text.
+
+fitdrpstop <- lmer(mean_popst~cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
+summary(fitdrpstop)
+
+fitdrpstopo <- lmer(mean_popst~Dscore+cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
+summary(fitdrpstopo)
+
+
 
 
 ## MODEL FOR FIGURE 4E ##
 ## how is richness predicted by varying groups of herbivores?
 fitrih <- lmer(meanrich~cows+wildlife+mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
-summary(fitrih)
 dredge(fitrih)
 
-fitrih_best <- lmer(meanrich~wildlife + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
+fitrih_best <- lm(meanrich~wildlife, data = stability_mechanisms, na.action = "na.fail")
 summary(fitrih_best)
 ## this one has singularity issues... not sure what to do... 
 ## CODE EDIT: Re-run as a linear model without the random effect, you should get essentially the same answer because the data here aren't supporting the complexity of the random effects structure so it's estimating 0 random effects variance.
@@ -89,7 +101,6 @@ summary(fitrih_best)
 ## MODEL FOR FIGURE 4F ##
 ## how is richness (10 year) predicted by drought and herbivory?
 fitdrri <- lmer(richness~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
-summary(fitdrri)
 dredge(fitdrri)
 
 fitdrri_best <- lmer(richness~Dscore+wildlife + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
@@ -97,6 +108,11 @@ summary(fitdrri_best)
 ## this one has singularity issues... not sure what to do... 
 ## CODE EDIT: see suggestion above
 
+fitdrritop <- lmer(richness~Dscore+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
+summary(fitdrritop)
+
+fitdrritopo <- lmer(richness~Dscore+wildlife+cows + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
+summary(fitdrritopo)
 
 ## MODEL FOR FIGURE 5 ##
 ## Check whether any factors are highly correlated (above 0.7 wouldn't put in a multiple regression together)
@@ -106,7 +122,6 @@ cor.test(stability_mechanisms$meanrich, stability_mechanisms$meanpopstab) ## -0.
 
 ## Model with all 3 stability mechanisms included as predictors
 fitstabmech <- lmer(stability~meanrich+classicVR+meanpopstab +(1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
-summary(fitstabmech)
 dredge(fitstabmech)
 
 ## test again to see if any of the predictors are highly correlated using the variance inflation factor

@@ -4,7 +4,7 @@
 library(tidyverse)
 library(lubridate)
 
-source("current_scripts/precipitation_data_cleaning.R") ## read in data
+source("precipitation_data_cleaning.R") ## read in data
 
 ## Classify Drought Years
 ## from total precipitation in the 12 months preceding sampling
@@ -175,9 +175,17 @@ d_severity <- dperc_record %>%
 # CALCULATE TOTAL DROUGHT SCORE IN EVERY WINDOW #
 ## first, identify years following droughts to eventually account for lag effects
 d_sever_prev <- d_severity %>%
+  arrange(sample_date) %>%
   mutate(drought_prev = ifelse(drought == 1, 0, 
-                               ifelse(lag(drought, default = 0) == 1, 1, 0)))
-  ## CODE EDIT: This doesn't appear as if it will affect the outcome, but dataframe should be sorted by sample_date *before* calculating lag. But see below, you may also need to update so that each year has a column for severity of previous year, in order to correctly add 0.5*severity for lag years.
+                               ifelse(lag(drought, default = 0) == 1, 1, 0))) %>%
+  mutate(severity_prev = lag(severity, default = 0)) ## add a column with the severity of previous year's drought to use in drought score function
+  ## CODE EDIT: This doesn't appear as if it will affect the outcome, 
+  ## but dataframe should be sorted by sample_date *before* calculating lag. 
+  ## But see below, you may also need to update so that each year has a column 
+  ## for severity of previous year, in order to correctly add 0.5*severity for lag years.
+
+
+
 
 ### CREATE Drought Scoring FUNCTION ###
 dr_score_func <- function(input_data, timestep, ...) { 
@@ -225,8 +233,10 @@ dr_score_func <- function(input_data, timestep, ...) {
         filter(sample_date %in% date) %>%
         mutate(Dscore_indiv = ifelse(drought == "1", 1*severity, 
                                      ifelse(drought_prev == "1",
-                                            0.5*severity, 0))) %>%
-        select(-preceding12ppt, -percentile, -severity, -drought_prev)
+                                            0.5*severity_prev, 0))) %>%
+        ## addressed code edit by adding column for severity of previous year's drought
+        ## multiply this by 0.5 and it should now affect the final outcome.
+        select(-preceding12ppt, -percentile, -severity, -drought_prev, - severity_prev)
       ## CODE EDIT: For a year in which there isn't a drought, but there was a previous-year drought, is this meant to give 0.5*(drought severity of previous year)? Currently, it's multiplying 0.5 by the severity of the year in question (not the previous year), which just gives 0.
       
       ## make a column for timestep
@@ -264,6 +274,3 @@ dscore5 <- dr_score_func(input_data = d_sever_prev, timestep = 5)
 
 rm(list = c("d_sever_prev", "d_severity", "dperc_record", "dtemp", "june", "july", "meanppt", "ppt_forcalc",
             "ppt98_20", "pptmean", "pptrange", "preceding12", "quant", "tempppt", "prec12_corrected", "y03", "y99"))
-
-
-

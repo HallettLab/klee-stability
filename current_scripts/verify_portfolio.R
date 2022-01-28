@@ -1,5 +1,5 @@
 ### Verify Portfolio Effect
-source("current_scripts/klee_allyears_cleaning.R")
+source("klee_allyears_cleaning.R")
 
 ## group by unique ID and species to calculate the mean and variance of each species
 portfolio_effect <- klee_annual %>%

@@ -1,9 +1,6 @@
 ## Moving Window Calculations
   ## for stability & biotic mechanisms
 
-## set working directory
-setwd("~/Repositories/klee-stability")
-
 ## Load packages
 library(tidyverse)
 library(codyn)
@@ -12,7 +9,7 @@ library(lubridate)
 
 
 ## source cleaned data
-source("current_scripts/klee_allyears_cleaning.R")
+source("klee_allyears_cleaning.R")
 
 
 ## Create Stability over a Moving Window Function
@@ -256,7 +253,8 @@ richnessmw_func <- function(input_data, timestep, ...) { ## function inputs = da
     temp_rich <- input_data %>%
       filter(Date_numeric %in% temp_samplepts) %>% ## filter the correct sample points from input data
       group_by(TREATMENT, Unique_ID, Date_numeric) %>%
-      mutate(richness = n()) ## CODE EDIT: consider changing to summarise(richness = n()) rather than mutate, to avoid duplicate rows that result in giving more weight to high-richness years in the subsequent averaging step
+      summarise(richness = n()) ## CODE EDIT: consider changing to summarise(richness = n()) rather than mutate, to avoid duplicate rows that result in giving more weight to high-richness years in the subsequent averaging step
+      ## code edit added in 1/1/22
     
     temp_rich$timestep <- i ## create a column for time step in the temporary data frame
     
@@ -306,6 +304,83 @@ mean_mwrich <- left_join(mwrichness, treats, by = c("Unique_ID", "TREATMENT")) %
 
 
 
+## Variance over a moving window function
+variance_mwfunc <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+  
+  n_samples <- length(unique(input_data$Date_final)) ## number of sampling points
+  n_windows <- n_samples - timestep + 1 ## how many windows to iterate over 
+  movingwindow <- data.frame(matrix(ncol=4,nrow=(n_windows*length(unique(input_data$Unique_ID))))) ## create empty dataframe to contain output ## dimensions = # cols (3) x (uniqueID x timesteps)
+  colnames(movingwindow) <- c("TREATMENT","Unique_ID", "variance", "timestep")
+  sample_points <- sort(unique(input_data$Date_numeric)) ## create ordered list of sample points
+  
+  n_plots <- length(unique(input_data$Unique_ID)) ## number of unique plots
+  
+  for (i in 1:n_windows){
+    
+    temp_samplepts <- sample_points[i:(i+timestep-1)] ## create a vector of sample points for each iteration
+    
+    temp <- input_data %>%
+      filter(Date_numeric %in% temp_samplepts) ## filter the correct sample points from input data
+    
+    temp_var <- temp %>%
+      group_by(TREATMENT, Unique_ID) %>%
+      summarise(variance = var(Pin_Hits))
+      
+    temp_var$timestep <- i ## create a column for timestep in the temporary data frame
+    
+    movingwindow[((i-1)*n_plots + 1):(i*n_plots),] <- temp_var ## add variance calcs for one iteration to the data frame
+    ## ((i-1)*n_plots + 1):(i*n_plots) -> where to put each iteration of the loop
+    
+  }
+  
+  return(movingwindow) ## retrieve data frame at the end
+  
+}
+
+vmw <- variance_mwfunc(input_data = klee_annual, timestep = 10)
+
+
+
+## Mean Total Cover over a moving window
+totcov_mwfunc <- function(input_data, timestep, ...) { ## function inputs = data frame and number of time steps
+  
+  n_samples <- length(unique(input_data$Date_final)) ## number of sampling points
+  n_windows <- n_samples - timestep + 1 ## how many windows to iterate over 
+  movingwindow <- data.frame(matrix(ncol=4,nrow=(n_windows*length(unique(input_data$Unique_ID))))) ## create empty dataframe to contain output ## dimensions = # cols (3) x (uniqueID x timesteps)
+  colnames(movingwindow) <- c("TREATMENT","Unique_ID", "totcov", "timestep")
+  sample_points <- sort(unique(input_data$Date_numeric)) ## create ordered list of sample points
+  
+  n_plots <- length(unique(input_data$Unique_ID)) ## number of unique plots
+  
+  for (i in 1:n_windows){
+    
+    temp_samplepts <- sample_points[i:(i+timestep-1)] ## create a vector of sample points for each iteration
+    
+    temp <- input_data %>%
+      filter(Date_numeric %in% temp_samplepts) ## filter the correct sample points from input data
+    
+    temp_cov <- temp %>%
+      group_by(TREATMENT, Unique_ID) %>%
+      summarise(totcov = mean(Pin_Hits))
+    
+    temp_cov$timestep <- i ## create a column for timestep in the temporary data frame
+    
+    movingwindow[((i-1)*n_plots + 1):(i*n_plots),] <- temp_cov ## add variance calcs for one iteration to the data frame
+    ## ((i-1)*n_plots + 1):(i*n_plots) -> where to put each iteration of the loop
+    
+  }
+  
+  return(movingwindow) ## retrieve data frame at the end
+  
+}
+
+tcmw <- totcov_mwfunc(input_data = klee_annual, timestep = 10)
+
+
+
+
+
+
 ## Join everything into one data frame ##
 ## select stability 5 & 10 year windows
 stabmw5 <- stab_mw_tx %>%
@@ -334,16 +409,20 @@ richmw10 <- rich_mw_tx %>%
 
 jk <- left_join(stabmw10, cvrmw10, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
 jk2 <- left_join(jk, spstmw10, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
-mw10all <- left_join(jk2, richmw10, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size")) 
+jk3 <- left_join(jk2, richmw10, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size")) 
+jk4 <- left_join(jk3, vmw, by = c("Unique_ID", "TREATMENT", "timestep"))
+mw10all <- left_join(jk4, tcmw, by = c("Unique_ID", "TREATMENT", "timestep"))
+
 
 jkl <- left_join(stabmw5, cvrmw5, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
 jkl2 <- left_join(jkl, spstmw5, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
 mw5all <- left_join(jkl2, richmw5, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size")) 
 
 ## Clean up environment
-rm(list = c("jk", "jk2", "nondom", "tmws", "totcov", "avg_biomass", "big5annual",
+rm(list = c("jk", "jk2", "jk3", "jk4", "nondom", "tmws", "totcov", "avg_biomass", "big5annual",
             "klee_annual", "klee_long", "mw_classicVR", "mwstability",
             "stab_mw_tx", "cVR_mw_tx", "cvrmw10", "cvrmw5",
             "tmwr", "tmwcVR", "stabmw5", "stabmw10", "spstmw5",
              "mwrichness", "mwspstab", "popst_mw_tx", "psmw",
             "rich_mw_tx", "richmw10", "richmw5", "spstmw10", "jkl", "jkl2"))
+  

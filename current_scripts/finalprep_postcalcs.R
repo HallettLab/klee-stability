@@ -1,11 +1,12 @@
 ### Final Data Cleaning after Calculations
 
+setwd("~/Repositories/klee-stability/current_scripts")
 library(tidyverse)
 
 ## read in data
-source("current_scripts/movingwindow_calcs.R")
-source("current_scripts/drought_score_calcs.R")
-source("current_scripts/full_timeseries_calcs.R")
+source("movingwindow_calcs.R")
+source("drought_score_calcs.R")
+source("full_timeseries_calcs.R")
 
 ## join 10 year moving window data with drought score
 dmw10 <- left_join(mw10all, dscore10, by = "timestep")
@@ -51,36 +52,24 @@ dmw10 <- dmw10 %>%
   mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
 
 ## Prep for Plotting Figures
-## prep dataframe for figures
 ## now that block is included, need to take the average of blocks
-figdrst <- dmw10 %>%
+mwfigs10 <- dmw10 %>%
   group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), stability = mean(stability))
+  summarize(Dscore = mean(Dscore), stability = mean(stability), 
+            classicVR = mean(classicVR),
+            popstab = mean(mean_popst),
+            richness = mean(richness),
+            meanvar = mean(variance), 
+            totalcov = mean(totcov))
 
 ## Make data frame of means first
-figdrst5 <- dmw5 %>%
+mwfigs5 <- dmw5 %>%
   group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), stability = mean(stability))
+  summarize(Dscore = mean(Dscore), stability = mean(stability),
+            classicVR = mean(classicVR),
+            popstab = mean(mean_popst),
+            richness = mean(richness))
 
-## prep dataframe for figures
-## now that block is included, need to take the average of blocks
-figdrcvr <- dmw10 %>%
-  group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), classicVR = mean(classicVR))
-
-
-## prep dataframe for figures
-## now that block is included, need to take the average of blocks
-figdrpopst <- dmw10 %>%
-  group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), popstab = mean(mean_popst))
-
-
-## prep dataframe for figures
-## now that block is included, need to take the average of blocks
-figdrri <- dmw10 %>%
-  group_by(timestep, TREATMENT) %>%
-  summarize(Dscore = mean(Dscore), richness = mean(richness))
 
 
 ## combine both VR dataframes into one in order to put all in the same panel
@@ -105,4 +94,4 @@ tsVR_plot <- tsVRalldom %>%
   mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
 
 
-rm(list = c("mw10all", "mw5all"))
+rm(list = c("mw10all", "mw5all", "tcmw", "vmw"))

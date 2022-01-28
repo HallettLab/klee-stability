@@ -25,6 +25,8 @@ names(klee_all) <- c("BLOCK", "TREATMENT", "SPECIES", "1999_06", "1999_09", "200
 klee_all_long <- pivot_longer(klee_all, cols = "1999_06":"2020_06", names_to = "Date", values_to = "Pin_Hits")
 
 dont_want <- c("Bare") #make a vector of species that are not wanted (so far only bare ground)
+## NOTE: keeping species listed as U, V, W -> based on "Spp list for checkingTPY_KLEE" 
+## these appear to be currently unknown but distinct species.
 
 ## create Unique ID for each block-plot combo and format date columns so they can fit in the lubridate package
 klee_long <- klee_all_long %>%
@@ -46,6 +48,11 @@ annual2 <- klee_long[klee_long$Date_final %like% "-05", ]
 
 klee_annual <- rbind(annual1, annual2)
 
+## How many unique taxa?
+unique(klee_annual$SPECIES)
+  ## should we keep Fern?
+  ## Digitaria 2 -> notes from TPY & others: Dig2 is diff from Dig mil
+  ## K, U, W -> unknowns still
 
 ## Calculate Total Cover
 totcov <- klee_annual %>%
@@ -74,10 +81,6 @@ big5 <- c("Brachiaria_lachnantha", "Pennisetum_stramineum", "Lintonia_nutans", "
 
 big5annual <- klee_annual %>%
   filter(SPECIES %in% big5)
-
-
-nondom <- klee_annual %>%
-  filter(!SPECIES %in% big5)
 
 
 ## remove unneeded objects to keep environment clean

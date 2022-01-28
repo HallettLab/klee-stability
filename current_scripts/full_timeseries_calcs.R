@@ -6,7 +6,7 @@ library(tsvr)
 library(lubridate)
 
 ## source cleaned data
-source("current_scripts/klee_allyears_cleaning.R")
+source("klee_allyears_cleaning.R")
 
 # Calculations
 ## Calculate Community Stability for all years
@@ -254,21 +254,6 @@ big5meanrichplot <- big5rich %>%
   group_by(TREATMENT, Unique_ID) %>%
   summarise(meanrich = mean(richness, SErich = calcSE(richness)), varrich = var(richness))
 
-## NON-DOMINANT SPECIES
-## Calculate species richness for each plot at each point in time
-nondomrich <- nondom %>%
-  group_by(TREATMENT, Unique_ID, Date_final) %>% ## group by each plot at each date
-  summarise(richness = n())
-
-## Calculate the mean richness by: 
-## TREATMENT and DATE
-nondommeanannrich <- nondomrich %>%
-  group_by(TREATMENT, Date_final) %>%
-  summarise(meanrich = mean(richness), SErich = calcSE(richness))
-## TREATMENT and UNIQUE_ID
-nondommeanrichplot <- nondomrich %>%
-  group_by(TREATMENT, Unique_ID) %>%
-  summarise(meanrich = mean(richness, SErich = calcSE(richness)), varrich = var(richness))
 
 ## Create combined Stability & Mechanisms Data Frames
 ## ALL YEARS
@@ -320,6 +305,6 @@ rm(list = c("avg_biomass", "b5meantsVR", "b5siteout", "big5annual",
             "big5meanannrich", "big5meanrichplot", "big5rich", "BP_dominance",
             "dominance", "dompopstab", "domsp_agg_stab", "klee_long",
             "meandompopstab", "meanplot_BPdom", "meanpopstab", "meanrichplot",
-            "meantsVR", "nondom", "nondommeanannrich", "nondommeanrichplot", "nondomrich",
+            "meantsVR", 
             "pinhits", "plot", "plot2", "res", "res0", "resLong", "resShort",
             "rich", "siteout", "stability", "VR_plots"))
