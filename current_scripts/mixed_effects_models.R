@@ -12,6 +12,7 @@ cor(stability_mechanisms$classicVR, stability_mechanisms$meanpopstab)
 cor(stability_mechanisms$classicVR, stability_mechanisms$meanrich)
 cor(stability_mechanisms$meanpopstab, stability_mechanisms$meanrich)
 
+
 ## MODEL for FIGURE 3A ##
 ## how is stability predicted by varying groups of herbivores?
 fitsth <- lmer(stability~cows+wildlife+mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
@@ -22,11 +23,67 @@ fitsth_best <- lmer(stability~cows + (1|BLOCK), data = stability_mechanisms, na.
 summary(fitsth_best)
 ## CODE EDIT: Here the most parsimonious model with delta AIC <2 is the one with only cows as a predictor, even though cows + wildlife is ranked first. I would present this slightly differently in text - let's chat about it.
 
+## model diagnostics
+dev.off()
+#Default plot of standardised residuals versus fitted
+plot(fitsth_best, resid(., scaled=TRUE) ~ fitted(.), abline = 0,pch=16, xlab="Fitted values", ylab="Standardised residuals")
+## the points are concentrated at the ends of the figure... why??
+## could this be a result of the categorical variable for herbivory?
+## does the variance look constant across the fitted range?
+
+## this is checking for heteroscedasticity: whether the standard deviations of a predicted variable, monitored over different values of the independent variable are non-constant 
+
+#Plotting the residuals against each explanatory variable
+plot(fitsth_best, resid(., scaled=TRUE) ~ cows, abline = 0,pch=16,xlab="Cows",ylab="Standardised residuals")
+## this didn't work, covariate needs to be numeric. hmm. 
+
+ggplot(data.frame(x1=stability_mechanisms$cows,pearson=residuals(fitsth_best,type="pearson")),
+       aes(x=x1,y=pearson)) +
+  geom_point() +
+  theme_bw()
+
+## Normality of Residuals
+dev.off()
+qqnorm(resid(fitsth_best))
+qqline(resid(fitsth_best))
+## it looks like there are deviations from the line... 
+
+#We can use a default plot of the standardised residuals versus fitted 
+#But add | <random effect> to see it per level of the random effect
+plot(fitsth_best, resid(., scaled=TRUE) ~ fitted(.)| BLOCK, abline = 0,pch=16,xlab="Fitted values",ylab="Standardised residuals")
+
+#Calculate leverage
+lev<-hat(model.matrix(fitsth_best))
+
+#Plot leverage against standardised residuals
+plot(resid(fitsth_best,type="pearson")~lev,las=1,ylab="Standardised residuals",xlab="Leverage")
+
+
+#Calculate Cook's Distance
+cd<-cooks.distance(fitsth_best)
+#N.B. If Cook's distance is greater than 1 this highlights problematic datapoints
+
+#Plot leverage and Cook's distance together
+par(mfrow=c(1,1))
+plot(lev,pch=16,col="red",ylim=c(0,1.2),las=1,ylab="Leverage/Cook's distance value")
+points(cd,pch=17,col="blue")
+points(x=150,y=1.1,pch=16,col="red")
+points(x=150,y=0.9,pch=17,col="blue")
+text(x=155,y=1.1,"Leverage",adj=c(0,0.5))
+text(x=155,y=0.9,"Cook's distance",adj=c(0,0.5))
+
+
+hist(as.vector(unlist(ranef(fitsth_best)$BLOCK)),breaks=seq(-2,1,0.25),border=NA)
+
+lattice::dotplot(ranef(fitsth_best, condVar=TRUE))
+
+
 fitsth_top_alt <- lmer(stability~cows + wildlife + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
 summary(fitsth_top_alt)
 
 fitsth_top_alt2 <- lmer(stability~cows + mega + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
 summary(fitsth_top_alt2)
+
 
 
 ## MODEL FOR FIGURE 3B ##
@@ -39,6 +96,21 @@ dredge(fitdrst)
 fitdrst_best <- lmer(stability~Dscore+cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
 summary(fitdrst_best)
 
+## model diagnostics
+dev.off()
+#Default plot of standardised residuals versus fitted
+plot(fitdrst_best, resid(., scaled=TRUE) ~ fitted(.), abline = 0,pch=16, xlab="Fitted values", ylab="Standardised residuals")
+
+#Plotting the residuals against each explanatory variable
+plot(fitdrst_best, resid(., scaled=TRUE) ~ Dscore, abline = 0,pch=16,xlab="Drought Score",ylab="Standardised residuals")
+
+## Normality of Residuals
+dev.off()
+qqnorm(resid(fitdrst_best))
+qqline(resid(fitdrst_best))
+
+fitdrst_best_alt <- lmer(stability~Dscore+cows+wildlife+mega + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
+summary(fitdrst_best_alt)
 
 
 
@@ -59,6 +131,7 @@ dredge(fitdrcvr)
 fitdrcvr_best <- lmer(classicVR~Dscore+cows+wildlife + (1|BLOCK) + (1|Unique_ID), data = dmw10, na.action = "na.fail")
 summary(fitdrcvr_best)
 
+plot(fitdrcvr_best)
 
 ## MODEL FOR FIGURE 4C ##
 ## how is dominant species population stability predicted by varying groups of herbivores?
@@ -131,3 +204,13 @@ vif(fitstabmech)
 fitstabmech_best <- lmer(stability~classicVR + meanpopstab + (1|BLOCK), data = stability_mechanisms, na.action = "na.fail")
 summary(fitstabmech_best)
 
+## diagnostic plots
+ggplot(data.frame(x1=stability_mechanisms$classicVR,pearson=residuals(fitstabmech_best,type="pearson")),
+       aes(x=x1,y=pearson)) +
+  geom_point() +
+  theme_bw()
+
+ggplot(data.frame(x2=stability_mechanisms$meanpopstab,pearson=residuals(fitdrcvr_best,type="pearson")),
+       aes(x=x2,y=pearson)) +
+  geom_point() +
+  theme_bw()

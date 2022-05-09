@@ -11,6 +11,9 @@ source("full_timeseries_calcs.R")
 ## join 10 year moving window data with drought score
 dmw10 <- left_join(mw10all, dscore10, by = "timestep")
 dmw5 <- left_join(mw5all, dscore5, by = "timestep")
+dmw7 <- left_join(mw7all, dscore7, by = "timestep")
+dmw12 <- left_join(mw12all, dscore12, by = "timestep")
+dmw15 <- left_join(mw15all, dscore15, by = "timestep")
 
 
 ## create cows, wildlife, & mega columns for models
@@ -71,6 +74,27 @@ mwfigs5 <- dmw5 %>%
             richness = mean(richness))
 
 
+mwfigs7 <- dmw7 %>%
+  group_by(timestep, TREATMENT) %>%
+  summarize(Dscore = mean(Dscore), stability = mean(stability),
+            classicVR = mean(classicVR),
+            popstab = mean(mean_popst),
+            richness = mean(richness))
+
+
+mwfigs15 <- dmw15 %>%
+  group_by(timestep, TREATMENT) %>%
+  summarize(Dscore = mean(Dscore), stability = mean(stability),
+            classicVR = mean(classicVR),
+            popstab = mean(mean_popst),
+            richness = mean(richness))
+
+mwfigs12 <- dmw12 %>%
+  group_by(timestep, TREATMENT) %>%
+  summarize(Dscore = mean(Dscore), stability = mean(stability),
+            classicVR = mean(classicVR),
+            popstab = mean(mean_popst),
+            richness = mean(richness))
 
 ## combine both VR dataframes into one in order to put all in the same panel
 colnames(b5tsVR) <- c("Unique_ID", "TREATMENT", "BLOCK", "classicVR", "longVR", "shortVR")

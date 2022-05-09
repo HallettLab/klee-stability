@@ -271,6 +271,12 @@ dscore10 <- dr_score_func(input_data = d_sever_prev, timestep = 10)
 ## calculate drought score over 5 year windows
 dscore5 <- dr_score_func(input_data = d_sever_prev, timestep = 5)
 
+dscore12 <- dr_score_func(input_data = d_sever_prev, timestep = 12)
+
+dscore7 <- dr_score_func(input_data = d_sever_prev, timestep = 7)
+
+dscore15 <- dr_score_func(input_data = d_sever_prev, timestep = 15)
+
 
 rm(list = c("d_sever_prev", "d_severity", "dperc_record", "dtemp", "june", "july", "meanppt", "ppt_forcalc",
             "ppt98_20", "pptmean", "pptrange", "preceding12", "quant", "tempppt", "prec12_corrected", "y03", "y99"))

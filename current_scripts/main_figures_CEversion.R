@@ -283,3 +283,530 @@ plot_grid(fig5, leg, rel_heights = c(5.5,1), ncol = 1)
 
 dev.off()
 
+
+
+## Supplementary Figures to Address Timescale
+
+## reorder treatment as a factor in all data frames just to make sure.
+mwfigs15$TREATMENT <- as.factor(mwfigs15$TREATMENT)
+mwfigs15 <- mwfigs15 %>%
+   mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+mwfigs10$TREATMENT <- as.factor(mwfigs10$TREATMENT)
+mwfigs10 <- mwfigs10 %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+mwfigs5$TREATMENT <- as.factor(mwfigs5$TREATMENT)
+mwfigs5 <- mwfigs5 %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+
+mwfigs12$TREATMENT <- as.factor(mwfigs12$TREATMENT)
+mwfigs12 <- mwfigs12 %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+mwfigs7$TREATMENT <- as.factor(mwfigs7$TREATMENT)
+mwfigs7 <- mwfigs7 %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
+
+
+## Check Drought Score and Stability at timescales
+## 5, 10, and 15 year windows
+yr10 <- ggplot(mwfigs10, aes(x=Dscore, y=stability)) +
+  geom_point() +
+  xlab("Drought Score (10yr)") + ylab("Stability (10yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10))
+
+yr5 <- ggplot(mwfigs5, aes(x=Dscore, y=stability)) +
+  geom_point() +
+  ylab("Stability (5yr)") + xlab("Drought Score (5yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10))
+
+yr15 <- ggplot(mwfigs15, aes(x=Dscore, y=stability)) +
+  geom_point() +
+  ylab("Stability (15yr)") + xlab("Drought Score (15yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10))
+
+pdf("d-stability.pdf", width = 7.087, height = 3.1, onefile = F)
+
+ggarrange(yr5, yr10, yr15,
+          ncol = 3, 
+          common.legend = TRUE, 
+          legend = "bottom", 
+          labels = "AUTO")
+dev.off()
+
+ggarrange(yr5, yr10, yr15,
+          ncol = 3, 
+          common.legend = TRUE, 
+          legend = "bottom", 
+          labels = "AUTO")
+ggsave("d-timescale.png", width= 7.087, height = 3.1)
+
+## Drought and herbivory/mechanisms at diff timescales
+
+dvr5 <- ggplot(mwfigs5, aes(x=Dscore, y=classicVR)) + 
+  geom_point() +
+  ylab("Variance Ratio (5yr)") + xlab("Drought Score (5yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  coord_cartesian(ylim = c(0,4.2))
+dvr10 <- ggplot(mwfigs10, aes(x=Dscore, y=classicVR)) + 
+  geom_point() +
+  ylab("Variance Ratio (10yr)") + xlab("Drought Score (10yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  coord_cartesian(ylim = c(0,4.2))
+dvr15 <- ggplot(mwfigs15, aes(x=Dscore, y=classicVR)) + 
+  geom_point() +
+  ylab("Variance Ratio (15yr)") + xlab("Drought Score (15yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  coord_cartesian(ylim = c(0,4.2))
+
+ggarrange(dvr5, dvr10, dvr15, 
+          ncol = 3, 
+          common.legend = TRUE,
+          legend = "bottom", 
+          labels = "AUTO")
+
+ggsave("dvr-timescale.png", width= 7.087, height = 3.1)
+
+
+
+## population stability and drought
+dps5 <- ggplot(mwfigs5, aes(x=Dscore, y=popstab)) + 
+  geom_point() +
+  ylab("Pop. Stability (5yr)") + xlab("Drought Score (5yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(ylim = c(1,5.5))
+  #geom_hline(yintercept = 1, linetype = "dashed") +
+  #coord_cartesian(ylim = c(0,4.2))
+dps10 <- ggplot(mwfigs10, aes(x=Dscore, y=popstab)) + 
+  geom_point() +
+  ylab("Pop. Stability (10yr)") + xlab("Drought Score (10yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(ylim = c(1,5.5))
+  #geom_hline(yintercept = 1, linetype = "dashed") #+
+  #coord_cartesian(ylim = c(0,4.2))
+dps15 <- ggplot(mwfigs15, aes(x=Dscore, y=popstab)) + 
+  geom_point() +
+  ylab("Pop. Stability (15yr)") + xlab("Drought Score (15yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(ylim = c(1,5.5))
+  #geom_hline(yintercept = 1, linetype = "dashed") +
+  #coord_cartesian(ylim = c(0,4.2))
+
+ggarrange(dps5, dps10, dps15, 
+          ncol = 3, 
+          common.legend = TRUE,
+          legend = "bottom", 
+          labels = "AUTO")
+
+ggsave("dps-timescale.png", width= 7.087, height = 3.1)
+
+
+
+
+## richness and drought
+dr5 <- ggplot(mwfigs5, aes(x=Dscore, y=richness)) + 
+  geom_point() +
+  ylab("Richness (5yr)") + xlab("Drought Score (5yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(ylim = c(16,24))
+#geom_hline(yintercept = 1, linetype = "dashed") +
+#coord_cartesian(ylim = c(0,4.2))
+dr10 <- ggplot(mwfigs10, aes(x=Dscore, y=richness)) + 
+  geom_point() +
+  ylab("Richness (10yr)") + xlab("Drought Score (10yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(ylim = c(16,24))
+#geom_hline(yintercept = 1, linetype = "dashed") #+
+#coord_cartesian(ylim = c(0,4.2))
+dr15 <- ggplot(mwfigs15, aes(x=Dscore, y=richness)) + 
+  geom_point() +
+  ylab("Richness (15yr)") + xlab("Drought Score (15yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+#geom_hline(yintercept = 1, linetype = "dashed") +
+  coord_cartesian(ylim = c(16,24))
+
+ggarrange(dr5, dr10, dr15, 
+          ncol = 3, 
+          common.legend = TRUE,
+          legend = "bottom", 
+          labels = "AUTO")
+
+ggsave("dr-timescale.png", width= 7.087, height = 3.1)
+
+
+## one big drought and biotic mechanism by timescale figure: 
+ggarrange(dvr5, dvr10, dvr15, 
+          dps5, dps10, dps15,
+          dr5, dr10, dr15,
+          ncol = 3, 
+          nrow = 3,
+          common.legend = TRUE,
+          legend = "bottom", 
+          labels = "AUTO")
+ggsave("d-timescale-allmech.png", width= 7.087, height = 9.1)
+
+## Stability and biotic mechanisms at different scales
+
+## VARIANCE RATIO
+vr15 <- ggplot(mwfigs15, aes(x=classicVR, y=stability)) +
+  geom_point() +
+  xlab("Variance Ratio (15yr)") + ylab("Stability (15yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  coord_cartesian(xlim = c(0,4.2), ylim = c(2.4, 12.6))
+
+vr10 <- ggplot(mwfigs10, aes(x=classicVR, y=stability)) +
+  geom_point() +
+  xlab("Variance Ratio (10yr)") + ylab("Stability (10yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  coord_cartesian(xlim = c(0,4.2), ylim = c(2.4, 12.6))
+
+vr5 <- ggplot(mwfigs5, aes(x=classicVR, y=stability)) +
+  geom_point() +
+  xlab("Variance Ratio (5yr)") + ylab("Stability (5yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(xlim = c(0,4.2), ylim = c(2.4, 12.6)) +
+  geom_vline(xintercept = 1, linetype = "dashed")
+  
+
+vrall <- ggplot(meanstab_mech, aes(x=mean_classicVR, y=mean_st)) +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+ # geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.06) +
+  #geom_errorbarh(aes(xmin = mean_classicVR-SEclassicVR, xmax=mean_classicVR+SEclassicVR), height = 0.1) + #add standard error bars
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  ylab("Stability (22yr)") + xlab("Variance Ratio (22yr)") + 
+  geom_smooth(method = "lm", se = FALSE, fullrange = T, color = "black", size = 0.75)+
+  theme(text = element_text(size = 12))  + #change font sizes
+  #annotate("text", x =1.07, y=3.3, label = "synchronous", size = 4, angle='90', fontface = 'italic') +
+  #annotate("text", x =0.9, y=3.3, label = "asynchronous", size = 4, angle='90',fontface = 'italic') +
+  theme(legend.position = "none") +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(xlim = c(0,4.2), ylim = c(2.4, 12.6))
+
+
+ggarrange(vr5, vr10, vr15, vrall,
+          ncol = 4, 
+          common.legend = TRUE, 
+          legend = "bottom",
+          labels = "AUTO")
+ggsave("vr-timescale.png", width= 7.087, height = 3.1)
+
+pdf("vr-timescale.pdf", width = 7.087, height = 3.1, onefile = F)
+
+ggarrange(vr5, vr10, vr15, vrall,
+                      ncol = 4, 
+                      common.legend = TRUE, 
+                      legend = "bottom")
+
+dev.off()
+
+## POP STABILITY 
+ps10 <- ggplot(mwfigs10, aes(x=popstab, y=stability)) +
+  geom_point() +
+  xlab("Pop. Stability (10yr)") + ylab("Stability (10yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(xlim = c(0,5.5), ylim = c(2.4, 12.6))
+
+ps5 <- ggplot(mwfigs5, aes(x=popstab, y=stability)) +
+  geom_point() +
+  xlab("Pop. Stability (5yr)") + ylab("Stability (5yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10))+
+  coord_cartesian(xlim = c(0,5.5), ylim = c(2.4, 12.6))
+
+ps15 <- ggplot(mwfigs15, aes(x=popstab, y=stability)) +
+  geom_point() +
+  xlab("Pop. Stability (15yr)") + ylab("Stability (15yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10))+
+  coord_cartesian(xlim = c(0,5.5), ylim = c(2.4, 12.6))
+
+
+psall <- ggplot(meanstab_mech, aes(x=avgpopstab, y=mean_st)) +
+  geom_smooth(method = "lm", se = FALSE, fullrange = T, color = "black", size = 0.75) +
+  #geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.06) +
+  #geom_errorbarh(aes(xmin = avgpopstab-SEpopstab, xmax=avgpopstab+SEpopstab), height = 0.1) + #add standard error bars
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +  ylab("Stability (22yr)") + xlab("Pop. Stability (22yr)") +  
+  theme(text = element_text(size = 10)) + #change font sizes
+  theme(legend.position = "none") +
+  coord_cartesian(xlim = c(0,5.5), ylim = c(2.4, 12.6))
+
+ggarrange(ps5, ps10, ps15, psall,
+          ncol = 4,
+          common.legend = TRUE,
+          legend = "bottom", 
+          labels = "AUTO")
+
+ggsave("ps-timescale.png", width= 7.087, height = 3.1)
+
+
+
+## RICHNESS
+r10 <- ggplot(mwfigs10, aes(x=richness, y=stability)) +
+  geom_point() +
+  xlab("Sp. Richness (10yr)") + ylab("Stability (10yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10))+
+  coord_cartesian(xlim = c(18,23.5), ylim = c(2.4, 12.6))
+
+r5 <- ggplot(mwfigs5, aes(x=richness, y=stability)) +
+  geom_point() +
+  xlab("Sp. Richness (5yr)") + ylab("Stability (5yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(xlim = c(18,23.5), ylim = c(2.4, 12.6))
+
+r15 <- ggplot(mwfigs15, aes(x=richness, y=stability)) +
+  geom_point() +
+  xlab("Sp. Richness (15yr)") + ylab("Stability (15yr)") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  theme(legend.text = element_text(size=10)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=10)) +  
+  theme(text = element_text(size = 10)) +
+  coord_cartesian(xlim = c(18,23.5), ylim = c(2.4, 12.6))
+
+rall <- ggplot(meanstab_mech, aes(x=mean_rich, y=mean_st)) +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 0.75) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +  
+  ylab("Stability") + xlab("Sp. Richness (22yr)") +  
+  theme(text = element_text(size = 10))  + #change font sizes
+  theme(legend.position = "none") +
+  coord_cartesian(xlim = c(18,23.5), ylim = c(2.4, 12.6))
+
+ggarrange(r5, r10, r15, rall, ncol = 4,
+          common.legend = TRUE,
+          legend = "bottom",
+          labels = "AUTO")
+
+ggsave("ri-timescale.png", width= 7.087, height = 3.1)
+
+
+
+ggarrange(vr5, vr10, vr15, vrall,
+          ps5, ps10, ps15, psall,
+          r5, r10, r15, rall,
+          ncol = 4, 
+          nrow = 3,
+          common.legend = TRUE, 
+          legend = "bottom",
+          labels = "AUTO")
+ggsave("stab-mechall-timescale.png", width= 7.087, height = 8.5)

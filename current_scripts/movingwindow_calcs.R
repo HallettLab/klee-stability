@@ -385,26 +385,50 @@ tcmw <- totcov_mwfunc(input_data = klee_annual, timestep = 10)
 ## select stability 5 & 10 year windows
 stabmw5 <- stab_mw_tx %>%
   filter(window_size == "5")
+stabmw7 <- stab_mw_tx %>%
+  filter(window_size == "7")
 stabmw10 <- stab_mw_tx %>%
   filter(window_size == "10")
+stabmw12 <- stab_mw_tx %>%
+  filter(window_size == "12")
+stabmw15 <- stab_mw_tx %>%
+  filter(window_size == "15")
 
 ## select classic VR 5 & 10 year windows
 cvrmw5 <- cVR_mw_tx %>%
   filter(window_size == "5")
+cvrmw7 <- cVR_mw_tx %>%
+  filter(window_size == "7")
 cvrmw10 <- cVR_mw_tx %>%
   filter(window_size == "10")
+cvrmw12 <- cVR_mw_tx %>%
+  filter(window_size == "12")
+cvrmw15 <- cVR_mw_tx %>%
+  filter(window_size == "15")
 
 ## select population stability 5 & 10 year windows
 spstmw10 <- popst_mw_tx %>%
   filter(window_size == "10")
 spstmw5 <- popst_mw_tx %>%
   filter(window_size == "5")
+spstmw7 <- popst_mw_tx %>%
+  filter(window_size == "7")
+spstmw12 <- popst_mw_tx %>%
+  filter(window_size == "12")
+spstmw15 <- popst_mw_tx %>%
+  filter(window_size == "15")
 
 ## select richness 5 & 10 year windows
 richmw5 <- rich_mw_tx %>%
   filter(window_size == "5")
 richmw10 <- rich_mw_tx %>%
   filter(window_size == "10")
+richmw12 <- rich_mw_tx %>%
+  filter(window_size == "12")
+richmw15 <- rich_mw_tx %>%
+  filter(window_size == "15")
+richmw7 <- rich_mw_tx %>%
+  filter(window_size == "7")
 
 
 jk <- left_join(stabmw10, cvrmw10, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
@@ -418,8 +442,23 @@ jkl <- left_join(stabmw5, cvrmw5, by = c("Unique_ID", "BLOCK", "TREATMENT", "tim
 jkl2 <- left_join(jkl, spstmw5, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
 mw5all <- left_join(jkl2, richmw5, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size")) 
 
+
+t1 <- left_join(stabmw7, cvrmw7, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
+t2 <- left_join(t1, spstmw7, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
+mw7all <- left_join(t2, richmw7, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size")) 
+
+tt1 <- left_join(stabmw12, cvrmw12, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
+tt2 <- left_join(tt1, spstmw12, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
+mw12all <- left_join(tt2, richmw7, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size")) 
+
+ttt1 <- left_join(stabmw15, cvrmw15, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
+ttt2 <- left_join(ttt1, spstmw15, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size"))
+mw15all <- left_join(ttt2, richmw15, by = c("Unique_ID", "BLOCK", "TREATMENT", "timestep", "window_size")) 
+
+
+
 ## Clean up environment
-rm(list = c("jk", "jk2", "jk3", "jk4", "nondom", "tmws", "totcov", "avg_biomass", "big5annual",
+rm(list = c("t1","t2", "jk", "jk2", "jk3", "jk4", "nondom", "tmws", "totcov", "avg_biomass", "big5annual",
             "klee_annual", "klee_long", "mw_classicVR", "mwstability",
             "stab_mw_tx", "cVR_mw_tx", "cvrmw10", "cvrmw5",
             "tmwr", "tmwcVR", "stabmw5", "stabmw10", "spstmw5",
