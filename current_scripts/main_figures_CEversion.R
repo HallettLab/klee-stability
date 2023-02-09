@@ -15,11 +15,11 @@ source("finalprep_postcalcs.R")
 theme_set(theme_classic()) #set the theme
 
 
-## Figure 1: Conceptual ##
+# Figure 1: Conceptual ####
   ## created in Illustrator
 
 
-## Figure 2: Cover and Richness over time
+# Figure 2: Cover and Richness over time ####
 ## get dates correct for plotting
 ppt_date <- drought_record %>%
   mutate(Date_final = ymd(sample_date)) %>%
@@ -86,7 +86,7 @@ ggarrange(ppt_plot, tcov_drought, richtime, ncol = 1, nrow = 3,
 dev.off()
 
 
-## Figure 3: Stability (full ts, 10yr) 
+# Figure 3: Stability (full ts, 10yr) ####
 s <- ggplot(meanstab_mech, aes(x=TREATMENT, y=mean_st)) +
   geom_point(size=3) +
   geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.2) + #add standard error bars
@@ -127,8 +127,26 @@ ggarrange(sdreg, s,
 dev.off()
 
 
+## modified Fig 3A for Truman ####
+ggplot(mwfigs10, aes(x=Dscore, y=stability, color = TREATMENT)) +
+  geom_point() +
+  ylab("Stability (10 year)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x, 
+            size = 1.25) +
+  theme(legend.text = element_text(size=12)) +
+  labs(fill = "Treatment:") +
+  theme(legend.title = element_text(size=12)) +  
+  theme(text = element_text(size = 12)) +
+  guides(color = "none")
 
-## Figure 4: Top-down and bottom-up effects on biotic stability mechanisms
+ggsave("fig3a_modified.pdf", height = 4.5, width = 5.5)
+
+# Figure 4: Top-down and bottom-up effects on biotic stability mechanisms ####
 ## variance ratio by herbivore treatment
 VRtrt <- ggplot(tsVR_plot, aes(x=TREATMENT, y=mean_cVR, fill = TREATMENT, shape = community_type, color = TREATMENT)) +
   geom_hline(yintercept = 1, linetype = "dashed") +
@@ -228,9 +246,43 @@ ggarrange(vrdreg, VRtrt,
 
 dev.off()
 
+## Modified Fig 4A for Truman ####
+ggplot(mwfigs10, aes(x=Dscore, y=classicVR, color = TREATMENT)) +
+  geom_point() +
+  ylab("Variance Ratio (10 yr)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=21, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.25) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) +
+  annotate("text", x =0.23, y=1.11, label = "synchronous", size = 3.5, fontface = 'italic') +
+  annotate("text", x =0.23, y=0.92, label = "asynchronous", size = 3.5, fontface = 'italic') +
+  guides(color = "none")
+ggsave("fig4a_modified.pdf", height = 4.5, width = 5.5)
+
+## Modified Fig 4C for Truman ####
+ggplot(mwfigs10, aes(x=Dscore, y=popstab, color = TREATMENT)) +
+  geom_point() +
+  ylab("Population Stability (10 yr)") + xlab("Drought Score") +
+  geom_point(aes(fill=TREATMENT), 
+             colour="black",pch=22, size=2.5) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  scale_color_scico_d(palette = "batlow", direction = -1) +
+  theme(legend.position = "right") +
+  geom_line(stat = "smooth", method = "lm", formula = y~x,
+            size = 1.25) +
+  theme(legend.title = element_text(size=12)) +  theme(text = element_text(size = 12)) +
+  guides(color = "none")
+ggsave("fig4c_modified.pdf", height = 4.5, width = 5.5)
 
 
-## Figure 5: Stability & Biotic Mechanisms
+# Figure 5: Stability & Biotic Mechanisms ####
 ## VR and stability
 VRstab <- ggplot(meanstab_mech, aes(x=mean_classicVR, y=mean_st)) +
   geom_smooth(method = "lm", se = FALSE, fullrange = T, color = "black", size = 1.15)+
@@ -283,6 +335,20 @@ plot_grid(fig5, leg, rel_heights = c(5.5,1), ncol = 1)
 
 dev.off()
 
+## Modified Fig 5A for Allison ####
+mod_fig5A <- ggplot(meanstab_mech_inv, aes(x=mean_inv_cVR, y=mean_st)) +
+  geom_smooth(method = "lm", se = FALSE, fullrange = T, color = "black", size = 1)+
+  geom_errorbar(aes(ymin = mean_st-SE_st, ymax=mean_st+SE_st), width = 0.06) +
+  geom_errorbarh(aes(xmin = mean_inv_cVR-SE_inv_cVR, xmax=mean_inv_cVR+SE_inv_cVR), height = 0.1) + #add standard error bars
+  geom_point(size=3) +
+  scale_fill_scico_d(palette = "batlow", direction = -1) +
+  ylab("Stability") + xlab("Compensation") +  
+  theme(text = element_text(size = 12))  + #change font sizes
+  theme(legend.position = "none")
+
+save(mod_fig5A, file = "modified_fig5A.RData")
+
+saveRDS(mod_fig5A, file = "modified_fig5A.RDS") 
 
 
 ## Supplementary Figures to Address Timescale
@@ -810,3 +876,36 @@ ggarrange(vr5, vr10, vr15, vrall,
           legend = "bottom",
           labels = "AUTO")
 ggsave("stab-mechall-timescale.png", width= 7.087, height = 8.5)
+
+
+
+### TSVR Figure
+
+tsvr_means <- stability_mechanisms %>%
+  pivot_longer(cols = c(longVR, shortVR), names_to = "VR_type", values_to = "VR") %>%
+  group_by(TREATMENT, VR_type) %>%
+  summarise(meanVR = mean(VR), SEVR = calcSE(VR))
+
+tsvr_means$TREATMENT <- as.factor(tsvr_means$TREATMENT)
+tsvr_means <- tsvr_means %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+
+
+ggplot(tsvr_means, aes(x=TREATMENT, y=meanVR)) +
+  geom_errorbar(aes(ymin = meanVR-SEVR, ymax = meanVR+SEVR), width = 0.25) +
+  geom_point(aes(fill=VR_type), 
+             colour="black",pch=21, size=3.5) +
+  scale_fill_grey(start = 0.8, end = 0.2) +
+  ylab("Variance Ratio") + xlab("Treatment") +
+  labs(fill = "Variance Ratio") +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  theme(legend.position = "top")
+  
+  
+ggsave("figureS3.png", width = 4, height = 3)
+
+
+#scale_fill_manual(values = c())
+
+
+  

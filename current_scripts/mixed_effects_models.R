@@ -251,3 +251,13 @@ dev.off()
 qqnorm(resid(fitstabmech_best))
 qqline(resid(fitstabmech_best))
 
+
+
+## Back of the napkin effect sizes?
+
+stability_means <- stability_mechanisms %>%
+  group_by(TREATMENT) %>%
+  summarise(meanstab = mean(stability), meancv = mean(classicVR), meanpops = mean(meanpopstab), meanri = mean(meanrich))
+
+
+

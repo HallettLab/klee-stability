@@ -282,6 +282,48 @@ meanstab_mech <- stability_mechanisms %>%
             mean_var = mean(variance), SE_var = calcSE(variance)) %>%
   mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC")) #reorder treatments
 
+# Calc inverse VR for Allison ####
+meanstab_mech_inv <- stability_mechanisms %>%
+  mutate(inv_classicVR = 1/classicVR) %>%
+  group_by(TREATMENT) %>%
+  summarise(mean_st = mean(stability), 
+            SE_st = calcSE(stability), 
+            mean_classicVR = mean(classicVR),
+            mean_inv_cVR = mean(inv_classicVR),
+            SE_inv_cVR = calcSE(inv_classicVR),
+            SEclassicVR = calcSE(classicVR), 
+            b5meanclassicVR = mean(b5classicVR), 
+            SEb5classicVR = calcSE(b5classicVR), 
+            SE_dom = calcSE(mean_dom), 
+            mean_dom = mean(mean_dom),
+            mean_rich = mean(meanrich), 
+            SE_rich = calcSE(meanrich), 
+            mean_vardom = mean(vardom), 
+            SE_vardom = calcSE(vardom), 
+            mean_varrich = mean(varrich), 
+            SE_varrich = calcSE(varrich),
+            mean_CV = mean(CV), 
+            SE_CV = calcSE(CV), 
+            meanlongVR = mean(longVR), 
+            SElVR = calcSE(longVR),
+            meanshortVR = mean(shortVR), 
+            SEsVR = calcSE(shortVR), 
+            b5meanlongVR = mean(b5longVR), 
+            SEb5lVR = calcSE(b5longVR), 
+            b5meanshortVR = mean(b5shortVR), 
+            SEb5sVR = calcSE(b5shortVR),
+            meanCV_dom = mean(CVdom), 
+            SECV_dom = calcSE(CVdom), 
+            meanCV_rich = mean(CVrich), 
+            SECV_rich = calcSE(CVrich), 
+            avgpopstab = mean(meanpopstab), 
+            SEpopstab = calcSE(meanpopstab), 
+            mean_bio = mean(pinhits), 
+            SE_bio = calcSE(pinhits),
+            mean_var = mean(variance), 
+            SE_var = calcSE(variance)) %>%
+  mutate(TREATMENT = fct_relevel(TREATMENT, "O", "W", "MW", "C", "WC", "MWC"))
+
 ## clean up environment
 rm(list = c("ssdom",  "tsvrssdom", "b5tsvrdom", "domspstsvr"))
 

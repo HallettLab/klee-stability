@@ -17,8 +17,18 @@ portfolio <- portfolio_effect %>%
 #run a linear model to calculate the slope
 taylor <- lm(logvar~ logmean, data = portfolio)
 summary(taylor)
+plot(taylor)
+AIC(taylor)
 #check that slope is between 1-2
 ## slope is 1.90052 
+
+## check model fits as relationship appears slightly sublinear.
+model <- lm(logvar ~ poly(logmean,3), data = portfolio)
+summary(model)
+
+plot(model)
+AIC(model)
+AIC(model)- AIC(taylor)
 
 ## plot log variance and log mean
 ggplot(portfolio, aes(x=logmean, y= logvar)) +
