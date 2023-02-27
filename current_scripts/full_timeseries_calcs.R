@@ -37,6 +37,7 @@ stability <- left_join(tstab, variance, by = c("TREATMENT", "Unique_ID"))
 rm(list = c("v", "commstab", "variance", "tstab"))
 
 ## Calculate TSVR
+### VR Calcs here, Allison! ####
 ### for full community
 ## Calculate Timescale Specific VR ##
 #set up data frame to put tsvr into
